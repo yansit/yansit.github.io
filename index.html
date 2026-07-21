@@ -3,139 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Screen Mirror</title>
-    <!-- QR Kod Üretici Kütüphane (CDN) -->
+    <title>Fast Screen Mirror - Yansıt</title>
+    <!-- Firebase SDK (v8) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <!-- QR Code Kütüphanesi -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f4f8;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background-color: #0d1117; 
+            color: #ffffff; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            min-height: 100vh; overflow: hidden;
         }
-        .container {
-            background-color: white;
-            padding: 40px;
-            border-radius: 24px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
-            text-align: center;
-            max-width: 500px;
-            width: 90%;
-        }
-        h1 {
-            color: #1E88E5;
-            margin: 0 0 10px 0;
-            font-size: 28px;
-        }
-        p {
-            color: #555;
-            margin-bottom: 30px;
-            font-size: 16px;
-            line-height: 1.5;
+        #qr-container {
+            text-align: center; background: #161b22; padding: 40px;
+            border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid #30363d;
         }
         #qrcode {
-            display: flex;
-            justify-content: center;
-            margin: 20px 0;
-            padding: 20px;
-            background: white;
-            border-radius: 16px;
-            border: 2px dashed #bbdefb;
+            background: #ffffff; padding: 16px; border-radius: 16px;
+            display: inline-block; margin: 20px 0;
         }
-        .loader {
-            margin-top: 20px;
-            font-size: 14px;
-            color: #757575;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
+        video {
+            display: none; width: 100vw; height: 100vh;
+            object-fit: contain; background: #000;
         }
-        .spinner {
-            width: 16px;
-            height: 16px;
-            border: 2px solid #1E88E5;
-            border-top: 2px solid transparent;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .status { color: #8b949e; font-size: 1.2rem; margin-top: 10px; }
+        .title { font-size: 2rem; font-weight: bold; color: #58a6ff; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Fast Screen Mirror</h1>
-        <p>Telefondaki uygulamayı açın ve aşağıdaki QR kodu <b>"QR Okut"</b> butonuna basarak okutun.</p>
-        
+    <!-- QR KOD EKRANI -->
+    <div id="qr-container">
+        <div class="title">yansit.github.io</div>
+        <p class="status">Telefondan QR kodu okutun</p>
         <div id="qrcode"></div>
-        
-        <div class="loader">
-            <div class="spinner"></div>
-            Telefon bağlantısı bekleniyor...
-        </div>
+        <p style="color: #484f58; font-size: 0.9rem;">Fast Screen Mirror</p>
     </div>
 
-    <!-- Firebase Bağlantısı ve Mantık -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+    <!-- CANLI VİDEO EKRANI (WebRTC) -->
+    <video id="remoteVideo" autoplay playsinline muted></video>
 
-        // DİKKAT: BURAYA KENDİ FİREBASE BİLGİLERİNİ GİR
+    <script>
+        // --- 1. FIREBASE BİLGİLERİN ---
         const firebaseConfig = {
-            apiKey: "SENIN_API_ANAHTARIN",
-            authDomain: "fast-screen-mirror.firebaseapp.com",
-            projectId: "fast-screen-mirror",
-            storageBucket: "fast-screen-mirror.appspot.com",
-            messagingSenderId: "SENIN_SENDER_ID",
-            appId: "SENIN_APP_ID"
+            apiKey: "AIzaSy...", // Senin Firebase Bilgilerin (Olduğu gibi kalsın)
+            authDomain: "fastscreenmirror-eb369.firebaseapp.com",
+            projectId: "fastscreenmirror-eb369",
+            storageBucket: "fastscreenmirror-eb369.firebasestorage.app",
+            messagingSenderId: "1062085375440",
+            appId: "1:1062085375440:web:..."
         };
 
-        // Firebase Başlat
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
-        // 1. Rastgele ve Benzersiz bir Session ID (Oturum Kodu) Üret
-        // Örn: FSM-7A3B9C (Hem kısa hem tahmin edilemez)
-        const generateSessionId = () => {
-            const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
-            return `FSM-${randomStr}`;
-        };
-        const sessionId = generateSessionId();
-
-        // 2. Bu ID'yi ekranda QR Kod olarak çizdir
+        // 2. RASTGELE EŞSİZ OTURUM KODU ÜRET VE QR ÇİZ
+        const sessionId = "FSM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
         new QRCode(document.getElementById("qrcode"), {
             text: sessionId,
-            width: 256,
-            height: 256,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
+            width: 220,
+            height: 220
         });
 
-        // 3. Kotayı korumak için "Canlı Dinleyici (onSnapshot)" başlat
-        const docRef = doc(db, "pins", sessionId);
-        
-        const unsubscribe = onSnapshot(docRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                if (data.ip) {
-                    // Bağlantı bulundu! Dinleyiciyi hemen kapat (Kota tasarrufu)
-                    unsubscribe(); 
-                    
-                    // Arayüzü güncelle
-                    document.querySelector('.loader').innerHTML = "<span style='color:green; font-weight:bold;'>Bağlantı Kuruldu! Yönlendiriliyor...</span>";
-                    
-                    // Yarım saniye sonra telefonu yansıtmaya başla (Yerel IP'ye git)
-                    setTimeout(() => {
-                        window.location.href = "http://" + data.ip;
-                    }, 500);
-                }
+        // 3. WEBRTC ALICI (PEER CONNECTION) AYARLARI
+        const peerConnection = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+
+        const remoteVideo = document.getElementById('remoteVideo');
+        const qrContainer = document.getElementById('qr-container');
+
+        // Telefondan gelen video akışını yakala
+        peerConnection.ontrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                remoteVideo.srcObject = event.streams[0];
+                qrContainer.style.display = 'none'; // QR Kodunu gizle
+                remoteVideo.style.display = 'block'; // Videoyu tam ekran aç
             }
+        };
+
+        // 4. FIREBASE İLE EL SIKIŞMA (SIGNALING)
+        const roomRef = db.collection('pins').doc(sessionId);
+
+        // ICE adaylarını Firebase'e gönder
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                roomRef.collection('calleeCandidates').add(event.candidate.toJSON());
+            }
+        };
+
+        // Telefonun gönderdiği Offer'ı dinle ve Cevap (Answer) ver
+        roomRef.onSnapshot(async (snapshot) => {
+            if (!snapshot.exists) return;
+            const data = snapshot.data();
+
+            // Telefondan Offer geldi mi?
+            if (data && data.offer && !peerConnection.currentRemoteDescription) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                
+                // Cevap oluştur
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                // Cevabı Firebase'e yaz ki telefon okusun
+                await roomRef.update({
+                    answer: { type: answer.type, sdp: answer.sdp }
+                });
+            }
+        });
+
+        // Telefonun ICE adaylarını dinle
+        roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
+            snapshot.docChanges().forEach(async (change) => {
+                if (change.type === 'added') {
+                    let data = change.doc.data();
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(data));
+                }
+            });
         });
     </script>
 </body>
