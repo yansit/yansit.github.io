@@ -2,41 +2,37 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Screen Mirror - Alıcı</title>
-    <!-- Firebase SDK v8 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fast Screen Mirror</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <!-- QR Code Kütüphanesi -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background-color: #0d1117;
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: #000000;
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
             overflow: hidden;
         }
         #qr-container {
             display: flex;
             flex-direction: column;
+            justify-content: center;
             align-items: center;
+            height: 100vh;
+            background: #0d1117;
+            text-align: center;
+        }
+        #qr-card {
             background: #161b22;
             padding: 40px;
             border-radius: 24px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border: 1px solid #30363d;
-            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
         }
         #qr-code {
             background: #ffffff;
@@ -44,40 +40,33 @@
             border-radius: 16px;
             margin: 20px 0;
         }
-        h1 {
-            font-size: 2.2rem;
-            color: #58a6ff;
-            margin-bottom: 8px;
-        }
-        p {
-            color: #8b949e;
-            font-size: 1.1rem;
-        }
-        /* Canlı Yayın Ekranı */
+        h1 { font-size: 2.2rem; color: #58a6ff; margin-bottom: 8px; }
+        p { color: #8b949e; font-size: 1.1rem; }
+        
+        /* CANLI VİDEO EKRANI - Tam Ekran & Barlar Yok */
         #remoteVideo {
             display: none;
             width: 100vw;
             height: 100vh;
-            object-fit: contain;
+            object-fit: cover; /* Üst/Alt barları kaldırır, ekrana tam oturur */
             background-color: #000000;
         }
     </style>
 </head>
 <body>
 
-    <!-- 1. QR KOD EKRANI -->
     <div id="qr-container">
-        <h1>yansit.github.io</h1>
-        <p>Telefondan QR kodu okutun</p>
-        <div id="qr-code"></div>
-        <p style="font-size: 0.9rem; color: #484f58;">Fast Screen Mirror</p>
+        <div id="qr-card">
+            <h1>yansit.github.io</h1>
+            <p>Telefondan QR kodu okutun</p>
+            <div id="qr-code"></div>
+            <p style="font-size: 0.9rem; color: #484f58;">Fast Screen Mirror</p>
+        </div>
     </div>
 
-    <!-- 2. CANLI VİDEO EKRANI (WebRTC) -->
     <video id="remoteVideo" autoplay playsinline muted></video>
 
     <script>
-        // --- 1. FIREBASE CONFIGURATION (EKRANDAN ALINAN GERÇEK VERİLER) ---
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
@@ -87,26 +76,18 @@
             appId: "1:343909100411:web:897479e9f8f48c7c1bebde"
         };
 
-        // Firebase Başlatma
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // --- 2. RASTGELE SESSION ID OLUŞTURMA VE QR BASTIRMA ---
         function generateSessionId() {
             const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
             let result = 'FSM-';
-            for (let i = 0; i < 6; i++) {
-                result += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
+            for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
             return result;
         }
 
         const sessionId = generateSessionId();
-        console.log("Oluşturulan Oturum ID:", sessionId);
 
-        // QR Kodu Ekrana Çizdir
         new QRCode(document.getElementById("qr-code"), {
             text: sessionId,
             width: 220,
@@ -116,10 +97,10 @@
             correctLevel : QRCode.CorrectLevel.H
         });
 
-        // --- 3. WEBRTC VE SİNYALLEŞME (SIGNALING) ---
         const servers = {
             iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' }
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
             ]
         };
 
@@ -127,61 +108,44 @@
         const remoteVideo = document.getElementById('remoteVideo');
         const qrContainer = document.getElementById('qr-container');
 
-        // Gelen Video Yayınını Yakala
         peerConnection.ontrack = (event) => {
-            console.log("Gelen video akışı yakalandı!");
             if (remoteVideo.srcObject !== event.streams[0]) {
                 remoteVideo.srcObject = event.streams[0];
-                
-                // QR Ekranını Gizle, Videoyu Tam Ekran Göster
                 qrContainer.style.display = 'none';
                 remoteVideo.style.display = 'block';
-                
                 remoteVideo.play().catch(e => console.error("Oynatma hatası:", e));
             }
         };
 
-        // ICE Candidate Üretildiğinde Firestore'a Yaz (Callee Candidates)
         const roomRef = db.collection('pins').doc(sessionId);
         const calleeCandidatesCollection = roomRef.collection('calleeCandidates');
 
         peerConnection.onicecandidate = (event) => {
-            if (event.candidate) {
-                calleeCandidatesCollection.add(event.candidate.toJSON());
-            }
+            if (event.candidate) calleeCandidatesCollection.add(event.candidate.toJSON());
         };
 
-        // --- 4. TELEFONDAN GELEN OFFER'I DİNLEME ---
+        let isConnected = false;
+
         roomRef.onSnapshot(async (snapshot) => {
             const data = snapshot.data();
-            if (!data) return;
+            if (!data || isConnected) return;
 
-            // Telefondan Offer Geldi mi?
             if (data.offer && !peerConnection.currentRemoteDescription) {
-                console.log("Telefondan Offer alındı, Answer hazırlanıyor...");
+                isConnected = true; // Sabotaj Engeli: Tekrar Offer kabul etmez
                 const rtcSessionDescription = new RTCSessionDescription(data.offer);
                 await peerConnection.setRemoteDescription(rtcSessionDescription);
 
-                // Cevap (Answer) Oluştur ve Gönder
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
-                await roomRef.update({
-                    answer: {
-                        type: answer.type,
-                        sdp: answer.sdp
-                    }
-                });
-                console.log("Answer Firestore'a yazıldı!");
+                await roomRef.update({ answer: { type: answer.type, sdp: answer.sdp } });
             }
         });
 
-        // Telefondan Gelen ICE Candidate'leri Dinle
         roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === 'added') {
-                    const data = change.doc.data();
-                    peerConnection.addIceCandidate(new RTCIceCandidate(data));
+                    peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
                 }
             });
         });
