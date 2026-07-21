@@ -49,20 +49,20 @@
     <video id="remoteVideo" autoplay playsinline muted></video>
 
     <script>
-        // --- 1. FIREBASE BİLGİLERİN ---
+        // --- FIREBASE BİLGİLERİ ---
         const firebaseConfig = {
-            apiKey: "AIzaSy...", // Senin Firebase Bilgilerin (Olduğu gibi kalsın)
+            apiKey: "BURAYA_GOOGLE_SERVICES_JSON_ICINDEKI_CURRENT_KEY_GELECEK", 
             authDomain: "fastscreenmirror-eb369.firebaseapp.com",
             projectId: "fastscreenmirror-eb369",
             storageBucket: "fastscreenmirror-eb369.firebasestorage.app",
-            messagingSenderId: "1062085375440",
-            appId: "1:1062085375440:web:..."
+            messagingSenderId: "343909100411",
+            appId: "1:343909100411:android:1c94630a5ce3802a1bebde"
         };
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        // 2. RASTGELE EŞSİZ OTURUM KODU ÜRET VE QR ÇİZ
+        // 1. RASTGELE EŞSİZ OTURUM KODU ÜRET VE QR ÇİZ
         const sessionId = "FSM-" + Math.random().toString(36).substring(2, 8).toUpperCase();
         new QRCode(document.getElementById("qrcode"), {
             text: sessionId,
@@ -70,7 +70,7 @@
             height: 220
         });
 
-        // 3. WEBRTC ALICI (PEER CONNECTION) AYARLARI
+        // 2. WEBRTC ALICI (PEER CONNECTION) AYARLARI
         const peerConnection = new RTCPeerConnection({
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
@@ -78,7 +78,7 @@
         const remoteVideo = document.getElementById('remoteVideo');
         const qrContainer = document.getElementById('qr-container');
 
-        // Telefondan gelen video akışını yakala
+        // Telefondan gelen canlı video akışını yakala
         peerConnection.ontrack = (event) => {
             if (event.streams && event.streams[0]) {
                 remoteVideo.srcObject = event.streams[0];
@@ -87,7 +87,7 @@
             }
         };
 
-        // 4. FIREBASE İLE EL SIKIŞMA (SIGNALING)
+        // 3. FIREBASE İLE EL SIKIŞMA (SIGNALING)
         const roomRef = db.collection('pins').doc(sessionId);
 
         // ICE adaylarını Firebase'e gönder
@@ -102,15 +102,12 @@
             if (!snapshot.exists) return;
             const data = snapshot.data();
 
-            // Telefondan Offer geldi mi?
             if (data && data.offer && !peerConnection.currentRemoteDescription) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                 
-                // Cevap oluştur
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
-                // Cevabı Firebase'e yaz ki telefon okusun
                 await roomRef.update({
                     answer: { type: answer.type, sdp: answer.sdp }
                 });
