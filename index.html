@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Screen Mirror</title>
+    <!-- QR Kod Üretici Kütüphane (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f4f8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+        h1 {
+            color: #1E88E5;
+            margin: 0 0 10px 0;
+            font-size: 28px;
+        }
+        p {
+            color: #555;
+            margin-bottom: 30px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        #qrcode {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 16px;
+            border: 2px dashed #bbdefb;
+        }
+        .loader {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #757575;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #1E88E5;
+            border-top: 2px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Fast Screen Mirror</h1>
+        <p>Telefondaki uygulamayı açın ve aşağıdaki QR kodu <b>"QR Okut"</b> butonuna basarak okutun.</p>
+        
+        <div id="qrcode"></div>
+        
+        <div class="loader">
+            <div class="spinner"></div>
+            Telefon bağlantısı bekleniyor...
+        </div>
+    </div>
+
+    <!-- Firebase Bağlantısı ve Mantık -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+
+        // DİKKAT: BURAYA KENDİ FİREBASE BİLGİLERİNİ GİR
+        const firebaseConfig = {
+            apiKey: "SENIN_API_ANAHTARIN",
+            authDomain: "fast-screen-mirror.firebaseapp.com",
+            projectId: "fast-screen-mirror",
+            storageBucket: "fast-screen-mirror.appspot.com",
+            messagingSenderId: "SENIN_SENDER_ID",
+            appId: "SENIN_APP_ID"
+        };
+
+        // Firebase Başlat
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // 1. Rastgele ve Benzersiz bir Session ID (Oturum Kodu) Üret
+        // Örn: FSM-7A3B9C (Hem kısa hem tahmin edilemez)
+        const generateSessionId = () => {
+            const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+            return `FSM-${randomStr}`;
+        };
+        const sessionId = generateSessionId();
+
+        // 2. Bu ID'yi ekranda QR Kod olarak çizdir
+        new QRCode(document.getElementById("qrcode"), {
+            text: sessionId,
+            width: 256,
+            height: 256,
+            colorDark : "#000000",
+            colorLight : "#ffffff",
+            correctLevel : QRCode.CorrectLevel.H
+        });
+
+        // 3. Kotayı korumak için "Canlı Dinleyici (onSnapshot)" başlat
+        const docRef = doc(db, "pins", sessionId);
+        
+        const unsubscribe = onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.ip) {
+                    // Bağlantı bulundu! Dinleyiciyi hemen kapat (Kota tasarrufu)
+                    unsubscribe(); 
+                    
+                    // Arayüzü güncelle
+                    document.querySelector('.loader').innerHTML = "<span style='color:green; font-weight:bold;'>Bağlantı Kuruldu! Yönlendiriliyor...</span>";
+                    
+                    // Yarım saniye sonra telefonu yansıtmaya başla (Yerel IP'ye git)
+                    setTimeout(() => {
+                        window.location.href = "http://" + data.ip;
+                    }, 500);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
