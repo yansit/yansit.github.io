@@ -124,16 +124,21 @@
 
     <script>
         // 1. TAM EKRAN AÇ/KAPA (TOGGLE) DİNLEYİCİSİ
-        document.body.addEventListener('click', (e) => {
+        function toggleFullScreen(e) {
             // Eğer kırmızı kapat butonuna tıklandıysa tam ekran işlemini iptal et
-            if (e.target.id === 'stop-btn') return;
+            if (e && e.target && e.target.id === 'stop-btn') return;
 
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => console.log(err));
             } else {
-                document.exitFullscreen().catch(err => console.log(err));
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(err => console.log(err));
+                }
             }
-        });
+        }
+
+        // Tıklamayı tüm sayfa kökünde dinle
+        document.addEventListener('click', toggleFullScreen);
 
         // 2. YAYINI DURDUR BUTONU
         function stopBroadcast() {
