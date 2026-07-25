@@ -17,55 +17,96 @@
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
-            cursor: pointer; /* Tıklanabilir hissi vermek için */
         }
+        
+        /* GİRİŞ EKRANI TASARIMI */
         #qr-container {
             display: flex;
             justify-content: center;
             align-items: center;
             height: 100vh;
             background: #0d1117;
+            cursor: pointer;
         }
         #qr-card {
             display: flex;
-            flex-direction: row;
+            flex-direction: column;
             align-items: center;
             background: #161b22;
-            padding: 40px;
+            padding: 50px;
             border-radius: 24px;
             border: 1px solid #30363d;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            max-width: 800px;
-            gap: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            text-align: center;
+            max-width: 900px;
         }
         #qr-box {
             background: #ffffff;
-            padding: 16px;
+            padding: 20px;
             border-radius: 16px;
+            margin: 30px 0;
         }
-        #info-box {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        h1 { font-size: 2.5rem; color: #58a6ff; margin-bottom: 12px; }
-        p { color: #8b949e; font-size: 1.2rem; line-height: 1.5; }
-        .highlight { color: #ffffff; font-weight: bold; }
         
+        /* BÜYÜK YAZILAR VE UYARILAR */
+        .url-text { font-size: 4.5rem; color: #58a6ff; font-weight: 900; letter-spacing: 2px; line-height: 1; margin-bottom: 10px;}
+        .instruction-text { color: #ffeb3b; font-size: 1.8rem; font-weight: bold; margin-top: 10px; }
+        .sub-text { color: #8b949e; font-size: 1.2rem; margin-top: 20px;}
+
+        /* CANLI VİDEO EKRANI - ZOOM DÜZELTİLDİ (contain) */
         #remoteVideo {
             display: none;
             width: 100vw;
             height: 100vh;
-            object-fit: cover;
+            object-fit: contain; /* Görüntüyü kırpmadan orijinal boyutuyla ekrana sığdırır */
             background-color: #000000;
         }
 
-        /* Mobil veya dar ekranlarda alt alta al */
+        /* YAYIN ÜSTÜ ARAYÜZ (KAPATMA BUTONU & UYARI) */
+        #video-overlay {
+            display: none;
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Tıklamaların videoya geçmesine izin ver */
+            z-index: 9999;
+        }
+        
+        /* KARE KIRMIZI KAPAT BUTONU */
+        #stop-btn {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            width: 60px;
+            height: 60px;
+            background-color: #d32f2f;
+            color: white;
+            border: 2px solid #ff5252;
+            border-radius: 8px; /* Tam kare istersen 0 yapabilirsin */
+            font-size: 28px;
+            cursor: pointer;
+            pointer-events: auto; /* Sadece buton tıklanabilir olsun */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.5);
+            transition: 0.2s;
+        }
+        #stop-btn:hover { background-color: #b71c1c; transform: scale(1.05); }
+
+        /* F11 UYARISI */
+        #fullscreen-hint {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 16px;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+
         @media (max-width: 768px) {
-            #qr-card {
-                flex-direction: column;
-                text-align: center;
-            }
+            .url-text { font-size: 2.5rem; }
+            .instruction-text { font-size: 1.3rem; }
         }
     </style>
 </head>
@@ -73,35 +114,38 @@
 
     <div id="qr-container">
         <div id="qr-card">
+            <h1 class="url-text">yansit.github.io</h1>
+            <p class="instruction-text">Tarayıcınızdan bu adresi açın ve uygulamadaki QR kodu okutun.</p>
+            
             <div id="qr-box">
                 <div id="qr-code"></div>
             </div>
-            <div id="info-box">
-                <h1 id="title-text">Fast Screen Mirror</h1>
-                <p id="desc-text">Open the app and scan this QR code to start mirroring your screen instantly.</p>
-                <p style="margin-top: 20px; font-size: 0.9rem; color: #484f58;" id="hint-text">(Click anywhere to enter full screen)</p>
-            </div>
+            
+            <p class="sub-text">(Tam ekran yapmak için ekrana dokunun)</p>
         </div>
     </div>
 
     <video id="remoteVideo" autoplay playsinline muted></video>
+    
+    <!-- YAYIN SIRASINDA GÖRÜNECEK ARAYÜZ -->
+    <div id="video-overlay">
+        <button id="stop-btn" onclick="stopBroadcast()" title="Yayını Durdur">■</button>
+        <div id="fullscreen-hint">Tam ekrandan çıkmak için F11 veya ESC tuşuna basınız.</div>
+    </div>
 
     <script>
-        // 1. ÇOKLU DİL (I18N) KONTROLÜ
-        const userLang = navigator.language || navigator.userLanguage; 
-        if (userLang.startsWith('tr')) {
-            document.getElementById('desc-text').innerHTML = "Ekranınızı anında yansıtmak için <span class='highlight'>uygulamayı açın</span> ve bu QR kodu okutun.";
-            document.getElementById('hint-text').innerText = "(Tam ekran yapmak için ekrana dokunun)";
-        }
-
-        // 2. OTOMATİK TAM EKRAN DİNLEYİCİSİ
-        document.body.addEventListener('click', () => {
+        // TAM EKRAN DİNLEYİCİSİ
+        document.getElementById('qr-container').addEventListener('click', () => {
             if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log("Fullscreen engellendi: " + err.message);
-                });
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
             }
         });
+
+        // WEB ÜZERİNDEN YAYINI KAPATMA FONKSİYONU
+        function stopBroadcast() {
+            if(document.fullscreenElement) document.exitFullscreen().catch(e => console.log(e));
+            window.location.reload(); // Sayfayı yenile ve QR ekrana geri dön
+        }
 
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
@@ -126,8 +170,8 @@
 
         new QRCode(document.getElementById("qr-code"), {
             text: sessionId,
-            width: 240,
-            height: 240,
+            width: 250,
+            height: 250,
             colorDark : "#000000",
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.H
@@ -143,13 +187,23 @@
         let peerConnection = new RTCPeerConnection(servers);
         const remoteVideo = document.getElementById('remoteVideo');
         const qrContainer = document.getElementById('qr-container');
+        const videoOverlay = document.getElementById('video-overlay');
 
         peerConnection.ontrack = (event) => {
             if (remoteVideo.srcObject !== event.streams[0]) {
                 remoteVideo.srcObject = event.streams[0];
                 qrContainer.style.display = 'none';
                 remoteVideo.style.display = 'block';
-                remoteVideo.play().catch(e => console.error("Oynatma hatası:", e));
+                videoOverlay.style.display = 'block'; // Kapatma butonu ve uyarıyı göster
+                remoteVideo.play().catch(e => console.error(e));
+            }
+        };
+
+        // TELEFON BAĞLANTIYI KOPARDIĞINDA OTOMATİK SIFIRLAMA
+        peerConnection.onconnectionstatechange = () => {
+            if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
+                console.log("Telefon yayını kesti. Sayfa yenileniyor...");
+                window.location.reload();
             }
         };
 
