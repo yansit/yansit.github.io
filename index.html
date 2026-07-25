@@ -19,7 +19,6 @@
             overflow: hidden;
         }
         
-        /* GİRİŞ EKRANI TASARIMI */
         #qr-container {
             display: flex;
             justify-content: center;
@@ -47,30 +46,26 @@
             margin: 30px 0;
         }
         
-        /* BÜYÜK YAZILAR VE UYARILAR */
         .url-text { font-size: 4.5rem; color: #58a6ff; font-weight: 900; letter-spacing: 2px; line-height: 1; margin-bottom: 10px;}
         .instruction-text { color: #ffeb3b; font-size: 1.8rem; font-weight: bold; margin-top: 10px; }
         .sub-text { color: #8b949e; font-size: 1.2rem; margin-top: 20px;}
 
-        /* CANLI VİDEO EKRANI - ZOOM DÜZELTİLDİ (contain) */
         #remoteVideo {
             display: none;
             width: 100vw;
             height: 100vh;
-            object-fit: contain; /* Görüntüyü kırpmadan orijinal boyutuyla ekrana sığdırır */
+            object-fit: contain;
             background-color: #000000;
         }
 
-        /* YAYIN ÜSTÜ ARAYÜZ (KAPATMA BUTONU & UYARI) */
         #video-overlay {
             display: none;
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; /* Tıklamaların videoya geçmesine izin ver */
+            pointer-events: none; 
             z-index: 9999;
         }
         
-        /* KARE KIRMIZI KAPAT BUTONU */
         #stop-btn {
             position: absolute;
             top: 30px;
@@ -80,10 +75,10 @@
             background-color: #d32f2f;
             color: white;
             border: 2px solid #ff5252;
-            border-radius: 8px; /* Tam kare istersen 0 yapabilirsin */
+            border-radius: 8px; 
             font-size: 28px;
             cursor: pointer;
-            pointer-events: auto; /* Sadece buton tıklanabilir olsun */
+            pointer-events: auto; 
             display: flex;
             justify-content: center;
             align-items: center;
@@ -92,7 +87,6 @@
         }
         #stop-btn:hover { background-color: #b71c1c; transform: scale(1.05); }
 
-        /* F11 UYARISI */
         #fullscreen-hint {
             position: absolute;
             bottom: 30px;
@@ -115,37 +109,36 @@
     <div id="qr-container">
         <div id="qr-card">
             <h1 class="url-text">yansit.github.io</h1>
-            <p class="instruction-text"> Uygulamaya Qr kodu okutun.</p>
-            
-            <div id="qr-box">
-                <div id="qr-code"></div>
-            </div>
-            
+            <p class="instruction-text">Uygulamaya Qr kodu okutun.</p>
+            <div id="qr-box"><div id="qr-code"></div></div>
             <p class="sub-text">(Tam ekran yapmak için ekrana dokunun)</p>
-            <p class="sub-text">(Tam ekrandan çıkmak için tekran dokunun)</p>
         </div>
     </div>
 
     <video id="remoteVideo" autoplay playsinline muted></video>
     
-    <!-- YAYIN SIRASINDA GÖRÜNECEK ARAYÜZ -->
     <div id="video-overlay">
         <button id="stop-btn" onclick="stopBroadcast()" title="Yayını Durdur">■</button>
-        <div id="fullscreen-hint">Tam ekrandan çıkmak için F11 veya ESC tuşuna basınız.</div>
+        <div id="fullscreen-hint">Büyütmek veya küçültmek için ekrana tıklayın.</div>
     </div>
 
     <script>
-        // TAM EKRAN DİNLEYİCİSİ
-        document.getElementById('qr-container').addEventListener('click', () => {
+        // 1. TAM EKRAN AÇ/KAPA (TOGGLE) DİNLEYİCİSİ
+        document.body.addEventListener('click', (e) => {
+            // Eğer kırmızı kapat butonuna tıklandıysa tam ekran işlemini iptal et
+            if (e.target.id === 'stop-btn') return;
+
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => console.log(err));
+            } else {
+                document.exitFullscreen().catch(err => console.log(err));
             }
         });
 
-        // WEB ÜZERİNDEN YAYINI KAPATMA FONKSİYONU
+        // 2. YAYINI DURDUR BUTONU
         function stopBroadcast() {
             if(document.fullscreenElement) document.exitFullscreen().catch(e => console.log(e));
-            window.location.reload(); // Sayfayı yenile ve QR ekrana geri dön
+            window.location.href = window.location.origin + window.location.pathname;
         }
 
         const firebaseConfig = {
@@ -195,21 +188,14 @@
                 remoteVideo.srcObject = event.streams[0];
                 qrContainer.style.display = 'none';
                 remoteVideo.style.display = 'block';
-                videoOverlay.style.display = 'block'; // Kapatma butonu ve uyarıyı göster
+                videoOverlay.style.display = 'block';
                 remoteVideo.play().catch(e => console.error(e));
             }
         };
 
-        // TELEFON BAĞLANTIYI KOPARDIĞINDA OTOMATİK SIFIRLAMA VE ANA EKRANA DÖNÜŞ
         peerConnection.onconnectionstatechange = () => {
-            if (peerConnection.connectionState === 'disconnected' || 
-                peerConnection.connectionState === 'failed' || 
-                peerConnection.connectionState === 'closed') {
-                console.log("Telefon yayını kesti. Ana sayfaya dönülüyor...");
-                if(document.fullscreenElement) {
-                    document.exitFullscreen().catch(e => console.log(e));
-                }
-                // URL'yi temizle ve sayfayı baştan yükle
+            if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
+                if(document.fullscreenElement) document.exitFullscreen().catch(e => console.log(e));
                 window.location.href = window.location.origin + window.location.pathname;
             }
         };
@@ -233,8 +219,12 @@
                 await peerConnection.setRemoteDescription(rtcSessionDescription);
 
                 const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
+                
+                // 3. GÖRÜNTÜ KALİTESİ ZORLAMASI (SDP BANT GENİŞLİĞİ HACKİ)
+                // Kalitenin pikselleşmesini engellemek için WebRTC'ye 8 Mbps limiti zorluyoruz.
+                answer.sdp = answer.sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:8000\r\n');
 
+                await peerConnection.setLocalDescription(answer);
                 await roomRef.update({ answer: { type: answer.type, sdp: answer.sdp } });
             }
         });
