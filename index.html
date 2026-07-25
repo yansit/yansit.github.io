@@ -115,13 +115,14 @@
     <div id="qr-container">
         <div id="qr-card">
             <h1 class="url-text">yansit.github.io</h1>
-            <p class="instruction-text">Tarayıcınızdan bu adresi açın ve uygulamadaki QR kodu okutun.</p>
+            <p class="instruction-text"> Uygulamaya Qr kodu okutun.</p>
             
             <div id="qr-box">
                 <div id="qr-code"></div>
             </div>
             
             <p class="sub-text">(Tam ekran yapmak için ekrana dokunun)</p>
+            <p class="sub-text">(Tam ekrandan çıkmak için tekran dokunun)</p>
         </div>
     </div>
 
@@ -199,11 +200,17 @@
             }
         };
 
-        // TELEFON BAĞLANTIYI KOPARDIĞINDA OTOMATİK SIFIRLAMA
+        // TELEFON BAĞLANTIYI KOPARDIĞINDA OTOMATİK SIFIRLAMA VE ANA EKRANA DÖNÜŞ
         peerConnection.onconnectionstatechange = () => {
-            if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
-                console.log("Telefon yayını kesti. Sayfa yenileniyor...");
-                window.location.reload();
+            if (peerConnection.connectionState === 'disconnected' || 
+                peerConnection.connectionState === 'failed' || 
+                peerConnection.connectionState === 'closed') {
+                console.log("Telefon yayını kesti. Ana sayfaya dönülüyor...");
+                if(document.fullscreenElement) {
+                    document.exitFullscreen().catch(e => console.log(e));
+                }
+                // URL'yi temizle ve sayfayı baştan yükle
+                window.location.href = window.location.origin + window.location.pathname;
             }
         };
 
