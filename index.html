@@ -17,39 +17,55 @@
             color: #ffffff;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
+            cursor: pointer; /* Tıklanabilir hissi vermek için */
         }
         #qr-container {
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
             background: #0d1117;
-            text-align: center;
         }
         #qr-card {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
             background: #161b22;
             padding: 40px;
             border-radius: 24px;
             border: 1px solid #30363d;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            max-width: 800px;
+            gap: 40px;
         }
-        #qr-code {
+        #qr-box {
             background: #ffffff;
             padding: 16px;
             border-radius: 16px;
-            margin: 20px 0;
         }
-        h1 { font-size: 2.2rem; color: #58a6ff; margin-bottom: 8px; }
-        p { color: #8b949e; font-size: 1.1rem; }
+        #info-box {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        h1 { font-size: 2.5rem; color: #58a6ff; margin-bottom: 12px; }
+        p { color: #8b949e; font-size: 1.2rem; line-height: 1.5; }
+        .highlight { color: #ffffff; font-weight: bold; }
         
-        /* CANLI VİDEO EKRANI - Tam Ekran & Barlar Yok */
         #remoteVideo {
             display: none;
             width: 100vw;
             height: 100vh;
-            object-fit: cover; /* Üst/Alt barları kaldırır, ekrana tam oturur */
+            object-fit: cover;
             background-color: #000000;
+        }
+
+        /* Mobil veya dar ekranlarda alt alta al */
+        @media (max-width: 768px) {
+            #qr-card {
+                flex-direction: column;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -57,16 +73,36 @@
 
     <div id="qr-container">
         <div id="qr-card">
-            <h1>yansit.github.io</h1>
-            <p>Telefondan QR kodu okutun</p>
-            <div id="qr-code"></div>
-            <p style="font-size: 0.9rem; color: #484f58;">Fast Screen Mirror</p>
+            <div id="qr-box">
+                <div id="qr-code"></div>
+            </div>
+            <div id="info-box">
+                <h1 id="title-text">Fast Screen Mirror</h1>
+                <p id="desc-text">Open the app and scan this QR code to start mirroring your screen instantly.</p>
+                <p style="margin-top: 20px; font-size: 0.9rem; color: #484f58;" id="hint-text">(Click anywhere to enter full screen)</p>
+            </div>
         </div>
     </div>
 
     <video id="remoteVideo" autoplay playsinline muted></video>
 
     <script>
+        // 1. ÇOKLU DİL (I18N) KONTROLÜ
+        const userLang = navigator.language || navigator.userLanguage; 
+        if (userLang.startsWith('tr')) {
+            document.getElementById('desc-text').innerHTML = "Ekranınızı anında yansıtmak için <span class='highlight'>uygulamayı açın</span> ve bu QR kodu okutun.";
+            document.getElementById('hint-text').innerText = "(Tam ekran yapmak için ekrana dokunun)";
+        }
+
+        // 2. OTOMATİK TAM EKRAN DİNLEYİCİSİ
+        document.body.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log("Fullscreen engellendi: " + err.message);
+                });
+            }
+        });
+
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
@@ -90,8 +126,8 @@
 
         new QRCode(document.getElementById("qr-code"), {
             text: sessionId,
-            width: 220,
-            height: 220,
+            width: 240,
+            height: 240,
             colorDark : "#000000",
             colorLight : "#ffffff",
             correctLevel : QRCode.CorrectLevel.H
@@ -131,7 +167,7 @@
             if (!data || isConnected) return;
 
             if (data.offer && !peerConnection.currentRemoteDescription) {
-                isConnected = true; // Sabotaj Engeli: Tekrar Offer kabul etmez
+                isConnected = true; 
                 const rtcSessionDescription = new RTCSessionDescription(data.offer);
                 await peerConnection.setRemoteDescription(rtcSessionDescription);
 
