@@ -2,245 +2,163 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Fast Screen Mirror</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Screen Mirror - Akıllı Tahta</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body {
-            width: 100%;
-            height: 100%;
-            background-color: #000000;
-            color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            overflow: hidden;
-        }
+        body, html { width: 100%; height: 100%; background-color: #000; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; color: #fff; }
         
-        #qr-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background: #0d1117;
-            cursor: pointer;
-        }
-        #qr-card {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background: #161b22;
-            padding: 50px;
-            border-radius: 24px;
-            border: 1px solid #30363d;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            text-align: center;
-            max-width: 900px;
-        }
-        #qr-box {
-            background: #ffffff;
-            padding: 20px;
-            border-radius: 16px;
-            margin: 30px 0;
-        }
+        /* QR Ve Bekleme Ekranı */
+        #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #qrcode { background: #fff; padding: 16px; border-radius: 16px; margin: 20px 0; }
+        .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
+        .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
+        .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
+
+        /* Video Yayın Ekranı */
+        #remoteVideo { width: 100vw; height: 100vh; object-fit: contain; display: none; background: #000; }
         
-        .url-text { font-size: 4.5rem; color: #58a6ff; font-weight: 900; letter-spacing: 2px; line-height: 1; margin-bottom: 10px;}
-        .instruction-text { color: #ffeb3b; font-size: 1.8rem; font-weight: bold; margin-top: 10px; }
-        .sub-text { color: #8b949e; font-size: 1.2rem; margin-top: 20px;}
-
-        #remoteVideo {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-            object-fit: contain;
-            background-color: #000000;
-        }
-
-        #video-overlay {
-            display: none;
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            pointer-events: none; 
-            z-index: 9999;
-        }
-        
-        #stop-btn {
-            position: absolute;
-            top: 30px;
-            left: 30px;
-            width: 60px;
-            height: 60px;
-            background-color: #d32f2f;
-            color: white;
-            border: 2px solid #ff5252;
-            border-radius: 8px; 
-            font-size: 28px;
-            cursor: pointer;
-            pointer-events: auto; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 4px 15px rgba(211, 47, 47, 0.5);
-            transition: 0.2s;
-        }
-        #stop-btn:hover { background-color: #b71c1c; transform: scale(1.05); }
-
-        #fullscreen-hint {
-            position: absolute;
-            bottom: 30px;
-            width: 100%;
-            text-align: center;
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 16px;
-            font-weight: 500;
-            letter-spacing: 1px;
-        }
-
-        @media (max-width: 768px) {
-            .url-text { font-size: 2.5rem; }
-            .instruction-text { font-size: 1.3rem; }
-        }
+        /* Durdur Butonu (Sol Üst) */
+        #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.8); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
+        #stop-btn:hover { background: rgba(244, 67, 54, 1); }
     </style>
+
+    <!-- Firebase SDK (v8 Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
-    <div id="qr-container">
-        <div id="qr-card">
-            <h1 class="url-text">yansit.github.io</h1>
-            <p class="instruction-text">Uygulamaya Qr kodu okutun.</p>
-            <div id="qr-box"><div id="qr-code"></div></div>
-            <p class="sub-text">(Tam ekran yapmak için ekrana dokunun)</p>
-        </div>
+    <!-- QR Kodu Gösterim Alanı -->
+    <div id="setup-container">
+        <div class="title">Fast Screen Mirror</div>
+        <div class="subtitle">Telefondaki uygulamadan bu QR kodu okutun</div>
+        <div id="qrcode"></div>
+        <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
     </div>
 
+    <!-- Canlı Video Ekranı -->
     <video id="remoteVideo" autoplay playsinline muted></video>
-    
-    <div id="video-overlay">
-        <button id="stop-btn" onclick="stopBroadcast()" title="Yayını Durdur">■</button>
-        <div id="fullscreen-hint">Büyütmek veya küçültmek için ekrana tıklayın.</div>
-    </div>
+    <button id="stop-btn" onclick="stopStream()">Yayını Kes</button>
 
     <script>
-        // 1. TAM EKRAN AÇ/KAPA (TOGGLE) DİNLEYİCİSİ
-        function toggleFullScreen(e) {
-            // Eğer kırmızı kapat butonuna tıklandıysa tam ekran işlemini iptal et
-            if (e && e.target && e.target.id === 'stop-btn') return;
-
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => console.log(err));
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen().catch(err => console.log(err));
-                }
-            }
-        }
-
-        // Tıklamayı tüm sayfa kökünde dinle
-        document.addEventListener('click', toggleFullScreen);
-
-        // 2. YAYINI DURDUR BUTONU
-        function stopBroadcast() {
-            if(document.fullscreenElement) document.exitFullscreen().catch(e => console.log(e));
-            window.location.href = window.location.origin + window.location.pathname;
-        }
-
+        // 1. FIREBASE YAPILANDIRMASI (.env verilerinizi buraya ekleyin)
         const firebaseConfig = {
-            apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
-            authDomain: "fast-screen-mirror.firebaseapp.com",
-            projectId: "fast-screen-mirror",
-            storageBucket: "fast-screen-mirror.firebasestorage.app",
-            messagingSenderId: "343909100411",
-            appId: "1:343909100411:web:897479e9f8f48c7c1bebde"
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
         };
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
 
-        function generateSessionId() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let result = 'FSM-';
-            for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-            return result;
-        }
+        let peerConnection = null;
+        let currentPinId = null;
 
-        const sessionId = generateSessionId();
-
-        new QRCode(document.getElementById("qr-code"), {
-            text: sessionId,
-            width: 250,
-            height: 250,
-            colorDark : "#000000",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
-        });
-
-        const servers = {
+        const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' }
             ]
         };
 
-        let peerConnection = new RTCPeerConnection(servers);
-        const remoteVideo = document.getElementById('remoteVideo');
-        const qrContainer = document.getElementById('qr-container');
-        const videoOverlay = document.getElementById('video-overlay');
-
-        peerConnection.ontrack = (event) => {
-            if (remoteVideo.srcObject !== event.streams[0]) {
-                remoteVideo.srcObject = event.streams[0];
-                qrContainer.style.display = 'none';
-                remoteVideo.style.display = 'block';
-                videoOverlay.style.display = 'block';
-                remoteVideo.play().catch(e => console.error(e));
+        // 2. RASTGELE PIN ÜRETİCİ
+        function generatePin() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let result = 'FSM-';
+            for (let i = 0; i < 6; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
             }
-        };
+            return result;
+        }
 
-        peerConnection.onconnectionstatechange = () => {
-            if (peerConnection.connectionState === 'disconnected' || peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
-                if(document.fullscreenElement) document.exitFullscreen().catch(e => console.log(e));
-                window.location.href = window.location.origin + window.location.pathname;
-            }
-        };
+        // 3. WEBRTC VE ODA BAŞLATMA
+        async function initRoom() {
+            currentPinId = generatePin();
+            document.getElementById('pin-display').innerText = currentPinId;
 
-        const roomRef = db.collection('pins').doc(sessionId);
-        const calleeCandidatesCollection = roomRef.collection('calleeCandidates');
+            // QR Kod Çiz
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById("qrcode"), {
+                text: currentPinId,
+                width: 200,
+                height: 200
+            });
 
-        peerConnection.onicecandidate = (event) => {
-            if (event.candidate) calleeCandidatesCollection.add(event.candidate.toJSON());
-        };
+            peerConnection = new RTCPeerConnection(configuration);
 
-        let isConnected = false;
+            // SİYAH EKRAN KESİN ÇÖZÜMÜ: Video akışı geldiği an oynatmaya zorluyoruz
+            peerConnection.ontrack = (event) => {
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject !== event.streams[0]) {
+                    remoteVideo.srcObject = event.streams[0];
+                    document.getElementById('setup-container').style.display = 'none';
+                    remoteVideo.style.display = 'block';
+                    document.getElementById('stop-btn').style.display = 'block';
+                    
+                    remoteVideo.play().catch(e => console.error("Video oynatma hatası:", e));
+                }
+            };
 
-        roomRef.onSnapshot(async (snapshot) => {
-            const data = snapshot.data();
-            if (!data || isConnected) return;
+            const roomRef = db.collection('pins').doc(currentPinId);
 
-            if (data.offer && !peerConnection.currentRemoteDescription) {
-                isConnected = true; 
-                const rtcSessionDescription = new RTCSessionDescription(data.offer);
-                await peerConnection.setRemoteDescription(rtcSessionDescription);
+            // ICE Candidate Dinleme (Telefon tarafı gonderdikçe alıyoruz)
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    roomRef.collection('calleeCandidates').add(event.candidate.toJSON());
+                }
+            };
 
-                const answer = await peerConnection.createAnswer();
-                
-                // 3. GÖRÜNTÜ KALİTESİ ZORLAMASI (SDP BANT GENİŞLİĞİ HACKİ)
-                // Kalitenin pikselleşmesini engellemek için WebRTC'ye 8 Mbps limiti zorluyoruz.
-                answer.sdp = answer.sdp.replace(/a=mid:video\r\n/g, 'a=mid:video\r\nb=AS:8000\r\n');
+            // Telefomdan OFFER bekleniyor
+            roomRef.onSnapshot(async (snapshot) => {
+                const data = snapshot.data();
+                if (data && data.offer && !peerConnection.currentRemoteDescription) {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
 
-                await peerConnection.setLocalDescription(answer);
-                await roomRef.update({ answer: { type: answer.type, sdp: answer.sdp } });
-            }
-        });
-
-        roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === 'added') {
-                    peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+                    await roomRef.update({
+                        answer: { type: answer.type, sdp: answer.sdp },
+                        status: 'connected'
+                    });
                 }
             });
+
+            // Telefonun ICE adaylarını ekle
+            roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    if (change.type === 'added') {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+                    }
+                });
+            });
+        }
+
+        // 4. YAYINI KESME VE TEMİZLİK
+        async function stopStream() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+            if (currentPinId) {
+                try {
+                    await db.collection('pins').doc(currentPinId).delete();
+                } catch(e){}
+            }
+            location.reload();
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (currentPinId) db.collection('pins').doc(currentPinId).delete();
         });
+
+        // Sayfa açılınca başlat
+        initRoom();
     </script>
 </body>
 </html>
