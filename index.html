@@ -6,14 +6,37 @@
     <title>Fast Screen Mirror - Akıllı Tahta</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { width: 100%; height: 100%; background-color: #000; font-family: sans-serif; overflow: hidden; display: flex; justify-content: center; align-items: center; color: #fff; }
-        #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        body, html { 
+            width: 100%; height: 100%; 
+            background-color: #000000; /* Oval kenarların kaybolması için saf siyah */
+            font-family: sans-serif; overflow: hidden; 
+            display: flex; justify-content: center; align-items: center; 
+            color: #fff; 
+        }
+        
+        #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
         #qrcode { background: #fff; padding: 16px; border-radius: 16px; margin: 20px 0; }
         .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
         .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
         .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
-        #remoteVideo { width: 100vw; height: 100vh; object-fit: contain; display: none; background: #000; cursor: pointer; }
-        #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.8); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
+        
+        /* Görüntü Yüklenirken Çıkan Şık Bekleme Ekranı (Siyah Ekranı Gizler) */
+        #loading-overlay {
+            display: none; position: fixed; inset: 0; background: #000000;
+            flex-direction: column; justify-content: center; align-items: center; z-index: 50;
+        }
+        .spinner { width: 50px; height: 50px; border: 5px solid #333; border-top-color: #1E88E5; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-top: 16px; font-size: 18px; color: #ccc; font-weight: bold; }
+
+        /* Sinema Modu: Görüntü ekranı ortalar, oval kenarlar arkaplana karışır */
+        #remoteVideo { 
+            width: 100vw; height: 100vh; 
+            object-fit: contain; /* En-boy oranını bozmadan ekrana tam oturtur */
+            display: none; background: #000000; cursor: pointer; 
+        }
+        
+        #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
     </style>
 
@@ -23,11 +46,18 @@
 </head>
 <body>
 
+    <!-- QR Bekleme Ekranı -->
     <div id="setup-container">
         <div class="title">Fast Screen Mirror</div>
         <div class="subtitle">Telefondaki uygulamadan bu QR kodu okutun</div>
         <div id="qrcode"></div>
         <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
+    </div>
+
+    <!-- Siyah Ekranı Engelleyen Yükleme Katmanı -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Görüntü Aktarılıyor...</div>
     </div>
 
     <!-- Canlı Video ve Ses Ekranı -->
@@ -39,12 +69,12 @@
         // DİKKAT: BURAYI KENDİ GERÇEK FIREBASE WEB PROJE BİLGİLERİNLE DEĞİŞTİR!
         // =========================================================================
         const firebaseConfig = {
-                        apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
+            apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
             projectId: "fast-screen-mirror",
             storageBucket: "fast-screen-mirror.firebasestorage.app",
             messagingSenderId: "343909100411",
-            appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
+            appId: "1:343909100411:web:897479e9f8f48c7c1bebde"
             measurementId: "G-2TCB607Q45"
         };
 
@@ -84,16 +114,14 @@
 
             peerConnection = new RTCPeerConnection(configuration);
 
-            // HEM VİDEO HEM SES İÇİN ALICI KANALI AÇIYORUZ
             if ('addTransceiver' in peerConnection) {
                 peerConnection.addTransceiver('video', { direction: 'recvonly' });
                 peerConnection.addTransceiver('audio', { direction: 'recvonly' });
-                console.log("🛠️ Video ve Ses Transceiver (recvonly) eklendi.");
             }
 
-            // GÖRÜNTÜ VE SES YAKALAYICI
+            // GÖRÜNTÜ GELDİĞİ AN ÇALIŞIR
             peerConnection.ontrack = (event) => {
-                console.log("🎥 VİDEO VE SES AKIŞI GELDİ!", event);
+                console.log("🎥 VİDEO İZİ GELDİ, OYNATMA BEKLENİYOR...");
                 const remoteVideo = document.getElementById('remoteVideo');
                 
                 let stream = (event.streams && event.streams[0]) 
@@ -101,14 +129,23 @@
                     : new MediaStream([event.track]);
 
                 remoteVideo.srcObject = stream;
+                
+                // 1. QR ekranını gizle, Görüntü Hazırlanıyor animasyonunu aç
                 document.getElementById('setup-container').style.display = 'none';
-                remoteVideo.style.display = 'block';
-                document.getElementById('stop-btn').style.display = 'block';
+                document.getElementById('loading-overlay').style.display = 'flex';
+
+                // 2. VİDEO GERÇEKTEN AKMAYA BAŞLADIĞINDA ANIMASYONU KALDIR
+                remoteVideo.onplaying = () => {
+                    console.log("✅ GÖRÜNTÜ EKRAMA YANSIDI!");
+                    document.getElementById('loading-overlay').style.display = 'none';
+                    remoteVideo.style.display = 'block';
+                    document.getElementById('stop-btn').style.display = 'block';
+                };
 
                 setTimeout(() => {
                     remoteVideo.muted = false;
                     remoteVideo.play().catch(e => {
-                        console.warn("Tarayıcı otomatik sesli oynatmayı engelledi. Ekrana tıklandığında ses açılacak.", e);
+                        console.warn("Tarayıcı otomatik sesli oynatmayı engelledi. İlk tıkta açılacak.", e);
                         document.body.addEventListener('click', () => {
                             remoteVideo.muted = false;
                             remoteVideo.play();
@@ -121,12 +158,18 @@
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
-                    console.log("❄️ Browser ICE Candidate:", event.candidate.candidate);
                     roomRef.collection('calleeCandidates').add(event.candidate.toJSON());
                 }
             };
 
             roomRef.onSnapshot(async (snapshot) => {
+                // ÇİFT YÖNLÜ KOPMA KONTROLÜ: Telefon yayını durdurursa sayfayı QR ekranına çevir
+                if (!snapshot.exists || (snapshot.data() && snapshot.data().status === 'ended')) {
+                    console.log("🛑 Yayın telefondan sonlandırıldı. QR ekrana dönülüyor...");
+                    stopStream();
+                    return;
+                }
+
                 try {
                     const data = snapshot.data();
                     if (data && data.offer && !peerConnection.currentRemoteDescription) {
@@ -135,7 +178,6 @@
                         const answer = await peerConnection.createAnswer();
                         await peerConnection.setLocalDescription(answer);
 
-                        console.log("📤 ANSWER Oluşturuldu, Firestore'a yazılıyor...");
                         await roomRef.update({
                             answer: { type: answer.type, sdp: answer.sdp },
                             status: 'connected'
@@ -156,7 +198,7 @@
             });
         }
 
-        // EVRENSEL TEK TIKLA TAM EKRAN YAP / TAM EKRANDAN ÇIK
+        // TEK TIKLA TAM EKRAN AÇ / KAPAT
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
@@ -178,17 +220,29 @@
             }
         });
 
+        // WEB'DEN YAYINI KESME BUTONU
         async function stopStream(e) {
             if (e) e.stopPropagation();
-            if (peerConnection) peerConnection.close();
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
             if (currentPinId) {
-                try { await db.collection('pins').doc(currentPinId).delete(); } catch(e){}
+                try { 
+                    // Telefone haber ver!
+                    await db.collection('pins').doc(currentPinId).update({ status: 'ended' });
+                    await new Promise(r => setTimeout(r, 400));
+                    await db.collection('pins').doc(currentPinId).delete(); 
+                } catch(e){}
             }
             location.reload();
         }
 
         window.addEventListener('beforeunload', () => {
-            if (currentPinId) db.collection('pins').doc(currentPinId).delete();
+            if (currentPinId) {
+                db.collection('pins').doc(currentPinId).update({ status: 'ended' });
+                db.collection('pins').doc(currentPinId).delete();
+            }
         });
 
         initRoom();
