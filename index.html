@@ -88,7 +88,7 @@
 
     <script>
         // =========================================================================
-        // KENDİ FIREBASE BİLGİLERİNİZİ BURAYA YAPISI ATINIZ
+        // FIREBASE YAPILANDIRMASI (VİRGÜL HATASI DÜZELTİLDİ)
         // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
@@ -97,7 +97,7 @@
             storageBucket: "fast-screen-mirror.firebasestorage.app",
             messagingSenderId: "343909100411",
             appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
-            measurementId: "G-2TCB607Q45",
+            measurementId: "G-2TCB607Q45"
         };
 
         let peerConnection = null;
@@ -169,7 +169,7 @@
                     document.getElementById('setup-container').style.display = 'none';
                     document.getElementById('loading-overlay').style.display = 'flex';
 
-                    // Tarayıcının 'play()' metodunu reddetmemesi için sessiz oynatma zorlanıyor
+                    // Tarayıcının play() metodunu reddetmemesi için sessiz oynatma zorlanıyor
                     remoteVideo.muted = true;
 
                     remoteVideo.onplaying = () => {
