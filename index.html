@@ -30,8 +30,8 @@
         <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
     </div>
 
-    <!-- Canlı Video Ekranı -->
-    <video id="remoteVideo" autoplay playsinline muted></video>
+    <!-- Canlı Video ve Ses Ekranı -->
+    <video id="remoteVideo" autoplay playsinline></video>
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
 
     <script>
@@ -39,7 +39,6 @@
         // DİKKAT: BURAYI KENDİ GERÇEK FIREBASE WEB PROJE BİLGİLERİNLE DEĞİŞTİR!
         // =========================================================================
         const firebaseConfig = {
-            
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
             projectId: "fast-screen-mirror",
@@ -85,13 +84,16 @@
 
             peerConnection = new RTCPeerConnection(configuration);
 
+            // HEM VİDEO HEM SES İÇİN ALICI KANALI AÇIYORUZ
             if ('addTransceiver' in peerConnection) {
                 peerConnection.addTransceiver('video', { direction: 'recvonly' });
+                peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+                console.log("🛠️ Video ve Ses Transceiver (recvonly) eklendi.");
             }
 
-            // GÖRÜNTÜ YAKALAYICI
+            // GÖRÜNTÜ VE SES YAKALAYICI
             peerConnection.ontrack = (event) => {
-                console.log("🎥 VİDEO AKIŞI GELDİ!", event);
+                console.log("🎥 VİDEO VE SES AKIŞI GELDİ!", event);
                 const remoteVideo = document.getElementById('remoteVideo');
                 
                 let stream = (event.streams && event.streams[0]) 
@@ -104,7 +106,14 @@
                 document.getElementById('stop-btn').style.display = 'block';
 
                 setTimeout(() => {
-                    remoteVideo.play().catch(e => console.error("Video Oynatma Hatası:", e));
+                    remoteVideo.muted = false;
+                    remoteVideo.play().catch(e => {
+                        console.warn("Tarayıcı otomatik sesli oynatmayı engelledi. Ekrana tıklandığında ses açılacak.", e);
+                        document.body.addEventListener('click', () => {
+                            remoteVideo.muted = false;
+                            remoteVideo.play();
+                        }, { once: true });
+                    });
                 }, 150);
             };
 
@@ -147,7 +156,7 @@
             });
         }
 
-        // TEK TIKLA TAM EKRAN YAP / TAM EKRANDAN ÇIK
+        // EVRENSEL TEK TIKLA TAM EKRAN YAP / TAM EKRANDAN ÇIK
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
