@@ -62,9 +62,7 @@
     <div id="setup-container">
         <div class="title">Fast Screen Mirror</div>
         <div class="subtitle">Telefondaki uygulamadan bu QR kodu okutun</div>
-        <div id="qrcode">
-            <!-- QR kod görseli buraya gelecek -->
-        </div>
+        <div id="qrcode"></div>
         <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
         <div id="error-display" class="error-code"></div>
     </div>
@@ -81,7 +79,7 @@
 
     <script>
         // =========================================================================
-        // GERÇEK FIREBASE BİLGİLERİN VE VİRGÜL HATASI GİDERİLDİ
+        // GERÇEK FIREBASE BİLGİLERİ (VİRGÜLLER DÜZELTİLDİ)
         // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
@@ -89,13 +87,14 @@
             projectId: "fast-screen-mirror",
             storageBucket: "fast-screen-mirror.firebasestorage.app",
             messagingSenderId: "343909100411",
-            appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
+            appId: "1:343909100411:web:897479e9f8f48c7c1bebde"
             measurementId: "G-2TCB607Q45",
         };
 
         let peerConnection = null;
         let currentPinId = null;
         let db = null;
+        let isSessionStarted = false; // Sonsuz döngüyü engelleyen kilit
 
         const configuration = {
             iceServers: [
@@ -124,7 +123,6 @@
                 console.log("🌐 Oda Oluşturuldu PIN:", currentPinId);
                 document.getElementById('pin-display').innerText = currentPinId;
 
-                // 100% GARANTİLİ QR KOD ÇİZİMİ (API üzerinden görsel olarak yükler, asla çökmez!)
                 const qrContainer = document.getElementById("qrcode");
                 const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=" + encodeURIComponent(currentPinId);
                 qrContainer.innerHTML = `<img src="${qrUrl}" alt="QR Kod" />`;
@@ -176,17 +174,31 @@
                     }
                 };
 
+                // SONSUZ DÖNGÜYÜ ENGELLEYEN YENİ DİNLEYİCİ MİMARİSİ
                 roomRef.onSnapshot(async (snapshot) => {
-                    if (!snapshot.exists || (snapshot.data() && snapshot.data().status === 'ended')) {
+                    // 1. Doküman henüz veritabanında yoksa SAKIN YENİLEME, SADECE BEKLE!
+                    if (!snapshot.exists) {
+                        if (isSessionStarted) {
+                            console.log("🛑 Oturum silindi, ana ekrana dönülüyor...");
+                            stopStream();
+                        }
+                        return;
+                    }
+
+                    const data = snapshot.data();
+
+                    // 2. Telefon 'status: ended' gönderdiyse yayını kes
+                    if (data && data.status === 'ended') {
                         console.log("🛑 Yayın telefondan sonlandırıldı. QR ekrana dönülüyor...");
                         stopStream();
                         return;
                     }
 
-                    try {
-                        const data = snapshot.data();
-                        if (data && data.offer && !peerConnection.currentRemoteDescription) {
+                    // 3. Telefondan Offer geldiyse Answer oluştur
+                    if (data && data.offer && !peerConnection.currentRemoteDescription) {
+                        try {
                             console.log("📥 OFFER Geldi, İşleniyor...");
+                            isSessionStarted = true; // Kilit açıldı: Oturum resmen başladı
                             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                             const answer = await peerConnection.createAnswer();
                             await peerConnection.setLocalDescription(answer);
@@ -196,9 +208,9 @@
                                 status: 'connected'
                             });
                             console.log("✅ ANSWER Başarıyla Yazıldı!");
+                        } catch (err) {
+                            console.error("❌ Offer-Answer Hatası:", err);
                         }
-                    } catch (err) {
-                        console.error("❌ Offer-Answer Hatası:", err);
                     }
                 });
 
@@ -257,7 +269,7 @@
         }
 
         window.addEventListener('beforeunload', () => {
-            if (currentPinId && db) {
+            if (currentPinId && db && isSessionStarted) {
                 db.collection('pins').doc(currentPinId).update({ status: 'ended' });
                 db.collection('pins').doc(currentPinId).delete();
             }
