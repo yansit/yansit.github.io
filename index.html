@@ -32,10 +32,10 @@
 
     <!-- Canlı Video Ekranı -->
     <video id="remoteVideo" autoplay playsinline muted></video>
-    <button id="stop-btn" onclick="stopStream()">Yayını Kes</button>
+    <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
 
     <script>
-        // 1. FIREBASE YAPILANDIRMANIZ
+        // FIREBASE YAPILANDIRMANIZ
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -81,19 +81,27 @@
 
             peerConnection = new RTCPeerConnection(configuration);
 
-            // TÜM BROWSERLAR/TV'LER İÇİN VİDEO ALICI KANALI
             if ('addTransceiver' in peerConnection) {
                 peerConnection.addTransceiver('video', { direction: 'recvonly' });
             }
 
+            // GÖRÜNTÜ GELME GARANTİSİ: Stream veya Track olarak gelse de yakalar
             peerConnection.ontrack = (event) => {
-                console.log("🎥 VİDEO AKIŞI GELDİ!", event.streams);
+                console.log("🎥 VİDEO AKIŞI GELİYOR!", event);
                 const remoteVideo = document.getElementById('remoteVideo');
-                remoteVideo.srcObject = event.streams[0];
+                
+                let stream = (event.streams && event.streams[0]) 
+                    ? event.streams[0] 
+                    : new MediaStream([event.track]);
+
+                remoteVideo.srcObject = stream;
                 document.getElementById('setup-container').style.display = 'none';
                 remoteVideo.style.display = 'block';
                 document.getElementById('stop-btn').style.display = 'block';
-                remoteVideo.play().catch(e => console.error("Video Oynatma Hatası:", e));
+
+                setTimeout(() => {
+                    remoteVideo.play().catch(e => console.error("Video Oynatma Hatası:", e));
+                }, 150);
             };
 
             const roomRef = db.collection('pins').doc(currentPinId);
@@ -105,7 +113,6 @@
                 }
             };
 
-            // TELEFONDAN OFFER GELMESİNİ DİNLEME
             roomRef.onSnapshot(async (snapshot) => {
                 try {
                     const data = snapshot.data();
@@ -136,25 +143,30 @@
             });
         }
 
-        // TEK TIKLA TAM EKRAN AÇ / KAPAT
-        const remoteVideoEl = document.getElementById('remoteVideo');
-        remoteVideoEl.addEventListener('click', () => {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                if (remoteVideoEl.requestFullscreen) {
-                    remoteVideoEl.requestFullscreen();
-                } else if (remoteVideoEl.webkitRequestFullscreen) {
-                    remoteVideoEl.webkitRequestFullscreen();
-                }
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
+        // EVRENSEL TEK TIKLA TAM EKRAN AÇ / KAPAT
+        document.addEventListener('click', (e) => {
+            if (e.target.id === 'stop-btn') return;
+            const remoteVideo = document.getElementById('remoteVideo');
+            
+            if (remoteVideo.style.display === 'block') {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen();
+                    } else if (document.documentElement.webkitRequestFullscreen) {
+                        document.documentElement.webkitRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    }
                 }
             }
         });
 
-        async function stopStream() {
+        async function stopStream(e) {
+            if (e) e.stopPropagation();
             if (peerConnection) peerConnection.close();
             if (currentPinId) {
                 try { await db.collection('pins').doc(currentPinId).delete(); } catch(e){}
