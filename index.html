@@ -68,13 +68,11 @@
         <div id="error-display" class="error-code"></div>
     </div>
 
-    <!-- Siyah Ekranı Engellemek İçin muted Ekli (Tarayıcı asla durduramaz) -->
     <video id="remoteVideo" autoplay playsinline muted></video>
-    <!-- Ses Arkadaki Bağımsız Oynatıcıdan Gelir -->
     <audio id="remoteAudio" autoplay></audio>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
-    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Sesi Açmak İçin Dokunun</div>
+    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Sesi TV'ye Aktarmak İçin Dokunun</div>
 
     <script>
         const firebaseConfig = {
@@ -144,10 +142,15 @@
                 peerConnection.ontrack = (event) => {
                     console.log("🎥 AKIŞ GELDİ (Tür):", event.track.kind);
                     
+                    // CRASH KORUMASI: İz koptuğunda patlama
+                    event.track.onended = () => {
+                        console.warn("Medya izi koptu.");
+                    };
+
                     if (event.track.kind === 'video') {
                         const remoteVideo = document.getElementById('remoteVideo');
                         remoteVideo.srcObject = event.streams[0] || new MediaStream([event.track]);
-                        remoteVideo.muted = true; // Siyah ekranı engelleyen kilit nokta!
+                        remoteVideo.muted = true;
                         
                         document.getElementById('setup-container').style.display = 'none';
                         remoteVideo.style.display = 'block';
@@ -161,9 +164,9 @@
                         remoteAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
                         
                         remoteAudio.play().then(() => {
-                            console.log("✅ Ses akışı başladı!");
+                            console.log("✅ Ses TV'den aktarılıyor!");
                         }).catch(e => {
-                            console.warn("Tarayıcı sesi kilitledi, dokunma butonu açıldı:", e);
+                            console.warn("TV sesli oynatmayı kilitledi, dokunma rozeti açıldı:", e);
                             document.getElementById('unmute-badge').style.display = 'block';
                         });
                     }
@@ -189,7 +192,7 @@
                     const data = snapshot.data();
 
                     if (data && data.status === 'ended') {
-                        console.log("🛑 Yayın telefondan sonlandırıldı. QR ekrana dönülüyor...");
+                        console.log("🛑 Yayın telefondan/tabletten sonlandırıldı. QR ekrana dönülüyor...");
                         stopStream();
                         return;
                     }
@@ -236,7 +239,7 @@
             document.getElementById('unmute-badge').style.display = 'none';
         }
 
-        // EVRENSEL TIKLAMA: Ekranın herhangi bir yerine tıklandığında sesi aç ve tam ekran yap
+        // TV'DE SİMGE YENİDEN ODAKLANDIĞINDA VEYA TIKLANDIĞINDA CRASH OLMASINI ENGELLER
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
@@ -247,32 +250,41 @@
                 remoteAudio.play().catch(err => console.log(err));
                 document.getElementById('unmute-badge').style.display = 'none';
 
-                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                    if (document.documentElement.requestFullscreen) {
-                        document.documentElement.requestFullscreen();
-                    } else if (document.documentElement.webkitRequestFullscreen) {
-                        document.documentElement.webkitRequestFullscreen();
+                try {
+                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                        if (document.documentElement.requestFullscreen) {
+                            document.documentElement.requestFullscreen();
+                        } else if (document.documentElement.webkitRequestFullscreen) {
+                            document.documentElement.webkitRequestFullscreen();
+                        }
                     }
-                } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    }
+                } catch(err) {
+                    console.warn("Tam ekran izni reddedildi/desteklenmiyor:", err);
                 }
+            }
+        });
+
+        // TV'de sekme değiştiğinde crash olmaması için güvenlik kalkanı
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                console.log("TV Sekmesi arka plana atıldı.");
+            } else {
+                console.log("TV Sekmesine geri dönüldü.");
+                const remoteVideo = document.getElementById('remoteVideo');
+                if (remoteVideo.srcObject) remoteVideo.play().catch(()=>{});
             }
         });
 
         async function stopStream(e) {
             if (e) e.stopPropagation();
             if (peerConnection) {
-                peerConnection.close();
+                try { peerConnection.close(); } catch(err){}
                 peerConnection = null;
             }
             if (currentPinId && db) {
                 try { 
                     await db.collection('pins').doc(currentPinId).update({ status: 'ended' });
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(r => setTimeout(r, 300));
                     await db.collection('pins').doc(currentPinId).delete(); 
                 } catch(err){}
             }
