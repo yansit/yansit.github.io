@@ -8,19 +8,32 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body, html { 
             width: 100%; height: 100%; 
-            background-color: #000000; /* Oval kenarların kaybolması için saf siyah */
+            background-color: #000000; 
             font-family: sans-serif; overflow: hidden; 
             display: flex; justify-content: center; align-items: center; 
             color: #fff; 
         }
         
         #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
-        #qrcode { background: #fff; padding: 16px; border-radius: 16px; margin: 20px 0; }
+        
+        /* QR Kodu İçin Çökmeyi Engelleyen Net Sabit Alan */
+        #qrcode { 
+            background: #ffffff; 
+            padding: 20px; 
+            border-radius: 16px; 
+            margin: 24px 0; 
+            width: 240px; 
+            height: 240px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
         .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
         .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
         .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
         
-        /* Görüntü Yüklenirken Çıkan Şık Bekleme Ekranı (Siyah Ekranı Gizler) */
+        /* Görüntü Yüklenirken Çıkan Bekleme Ekranı */
         #loading-overlay {
             display: none; position: fixed; inset: 0; background: #000000;
             flex-direction: column; justify-content: center; align-items: center; z-index: 50;
@@ -29,10 +42,10 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .loading-text { margin-top: 16px; font-size: 18px; color: #ccc; font-weight: bold; }
 
-        /* Sinema Modu: Görüntü ekranı ortalar, oval kenarlar arkaplana karışır */
+        /* Sinema Modu: Görüntü ekranı ortalar */
         #remoteVideo { 
             width: 100vw; height: 100vh; 
-            object-fit: contain; /* En-boy oranını bozmadan ekrana tam oturtur */
+            object-fit: contain; 
             display: none; background: #000000; cursor: pointer; 
         }
         
@@ -105,12 +118,20 @@
             console.log("🌐 Oda Oluşturuldu PIN:", currentPinId);
             document.getElementById('pin-display').innerText = currentPinId;
 
-            document.getElementById('qrcode').innerHTML = "";
-            new QRCode(document.getElementById("qrcode"), {
-                text: currentPinId,
-                width: 200,
-                height: 200
-            });
+            // QR KOD ÇİZİMİ (Çökmeyi engelleyen güvenli yöntem)
+            const qrContainer = document.getElementById("qrcode");
+            qrContainer.innerHTML = "";
+            
+            setTimeout(() => {
+                new QRCode(qrContainer, {
+                    text: currentPinId,
+                    width: 200,
+                    height: 200,
+                    colorDark : "#000000",
+                    colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+            }, 50);
 
             peerConnection = new RTCPeerConnection(configuration);
 
@@ -119,7 +140,6 @@
                 peerConnection.addTransceiver('audio', { direction: 'recvonly' });
             }
 
-            // GÖRÜNTÜ GELDİĞİ AN ÇALIŞIR
             peerConnection.ontrack = (event) => {
                 console.log("🎥 VİDEO İZİ GELDİ, OYNATMA BEKLENİYOR...");
                 const remoteVideo = document.getElementById('remoteVideo');
@@ -130,13 +150,11 @@
 
                 remoteVideo.srcObject = stream;
                 
-                // 1. QR ekranını gizle, Görüntü Hazırlanıyor animasyonunu aç
                 document.getElementById('setup-container').style.display = 'none';
                 document.getElementById('loading-overlay').style.display = 'flex';
 
-                // 2. VİDEO GERÇEKTEN AKMAYA BAŞLADIĞINDA ANIMASYONU KALDIR
                 remoteVideo.onplaying = () => {
-                    console.log("✅ GÖRÜNTÜ EKRAMA YANSIDI!");
+                    console.log("✅ GÖRÜNTÜ EKRANA YANSIDI!");
                     document.getElementById('loading-overlay').style.display = 'none';
                     remoteVideo.style.display = 'block';
                     document.getElementById('stop-btn').style.display = 'block';
@@ -163,7 +181,6 @@
             };
 
             roomRef.onSnapshot(async (snapshot) => {
-                // ÇİFT YÖNLÜ KOPMA KONTROLÜ: Telefon yayını durdurursa sayfayı QR ekranına çevir
                 if (!snapshot.exists || (snapshot.data() && snapshot.data().status === 'ended')) {
                     console.log("🛑 Yayın telefondan sonlandırıldı. QR ekrana dönülüyor...");
                     stopStream();
@@ -198,7 +215,6 @@
             });
         }
 
-        // TEK TIKLA TAM EKRAN AÇ / KAPAT
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
@@ -220,7 +236,6 @@
             }
         });
 
-        // WEB'DEN YAYINI KESME BUTONU
         async function stopStream(e) {
             if (e) e.stopPropagation();
             if (peerConnection) {
@@ -229,7 +244,6 @@
             }
             if (currentPinId) {
                 try { 
-                    // Telefone haber ver!
                     await db.collection('pins').doc(currentPinId).update({ status: 'ended' });
                     await new Promise(r => setTimeout(r, 400));
                     await db.collection('pins').doc(currentPinId).delete(); 
@@ -245,7 +259,10 @@
             }
         });
 
-        initRoom();
+        // Sayfa DOM ağacı tamamen hazır olunca çalıştır
+        window.addEventListener('DOMContentLoaded', () => {
+            initRoom();
+        });
     </script>
 </body>
 </html>
