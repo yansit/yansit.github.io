@@ -27,7 +27,7 @@
             justify-content: center;
             align-items: center;
         }
-        #qrcode img { width: 200px; height: 200px; display: block; }
+        #qrcode img, #qrcode canvas { width: 200px !important; height: 200px !important; display: block; }
         
         .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
         .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
@@ -61,9 +61,10 @@
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
     </style>
 
-    <!-- Firebase SDK -->
+    <!-- Firebase SDK & QRCode JS -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -86,6 +87,9 @@
     <div id="unmute-badge">🔊 Sesi Açmak İçin Tıklayın</div>
 
     <script>
+        // =========================================================================
+        // KENDİ FIREBASE BİLGİLERİNİZİ BURAYA YAPISI ATINIZ
+        // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
@@ -131,9 +135,19 @@
                 console.log("🌐 Oda Oluşturuldu PIN:", currentPinId);
                 document.getElementById('pin-display').innerText = currentPinId;
 
+                // %100 GARANTİLİ YEREL QR ÜRETİMİ (Kutu çizildikten sonra milisaniyeler içinde üretilir)
                 const qrContainer = document.getElementById("qrcode");
-                const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data=" + encodeURIComponent(currentPinId);
-                qrContainer.innerHTML = `<img src="${qrUrl}" alt="QR Kod" />`;
+                qrContainer.innerHTML = "";
+                setTimeout(() => {
+                    new QRCode(qrContainer, {
+                        text: currentPinId,
+                        width: 200,
+                        height: 200,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }, 50);
 
                 peerConnection = new RTCPeerConnection(configuration);
 
@@ -155,7 +169,7 @@
                     document.getElementById('setup-container').style.display = 'none';
                     document.getElementById('loading-overlay').style.display = 'flex';
 
-                    // 100% GARANTİLİ: Tarayıcının engellememesi için JS üzerinden muted zorluyoruz!
+                    // Tarayıcının 'play()' metodunu reddetmemesi için sessiz oynatma zorlanıyor
                     remoteVideo.muted = true;
 
                     remoteVideo.onplaying = () => {
@@ -166,7 +180,6 @@
                         document.getElementById('unmute-badge').style.display = 'block';
                     };
 
-                    // Sessiz oynatmayı zorla başlat (Asla NotAllowedError vermez)
                     remoteVideo.play().catch(e => {
                         console.warn("Sessiz oynatıda bile engel oluştu, tıklandığında açılacak:", e);
                         document.body.addEventListener('click', () => {
