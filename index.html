@@ -50,6 +50,16 @@
         
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
+
+        /* Tarayıcı Sesi Engellerse Çıkacak Şık Uyarı Rozeti */
+        #unmute-badge {
+            display: none; position: fixed; bottom: 30px; right: 30px;
+            background: #1E88E5; color: white; padding: 14px 24px;
+            border-radius: 50px; font-weight: bold; font-size: 16px;
+            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.5); z-index: 999;
+            cursor: pointer; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
     </style>
 
     <!-- Firebase SDK -->
@@ -58,7 +68,6 @@
 </head>
 <body>
 
-    <!-- QR Bekleme Ekranı -->
     <div id="setup-container">
         <div class="title">Fast Screen Mirror</div>
         <div class="subtitle">Telefondaki uygulamadan bu QR kodu okutun</div>
@@ -67,15 +76,16 @@
         <div id="error-display" class="error-code"></div>
     </div>
 
-    <!-- Siyah Ekranı Engelleyen Yükleme Katmanı -->
     <div id="loading-overlay">
         <div class="spinner"></div>
         <div class="loading-text">Görüntü Aktarılıyor...</div>
     </div>
 
-    <!-- Canlı Video ve Ses Ekranı -->
-    <video id="remoteVideo" autoplay playsinline></video>
+    <!-- muted özelliği ile tarayıcı engeli 100% aşılır -->
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
+    <div id="unmute-badge">🔊 Sesi Açmak İçin Tıklayın</div>
 
     <script>
         const firebaseConfig = {
@@ -84,14 +94,15 @@
             projectId: "fast-screen-mirror",
             storageBucket: "fast-screen-mirror.firebasestorage.app",
             messagingSenderId: "343909100411",
-            appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
+            appId: "1:343909100411:web:897479e9f8f48c7c1bebde"
             measurementId: "G-2TCB607Q45",
         };
 
         let peerConnection = null;
         let currentPinId = null;
         let db = null;
-        let isConnecting = false; // BAĞLANTI DURUMUNU İZLEYEN KİLİT
+        let isConnecting = false;
+        let remoteStream = new MediaStream(); // SES VE VİDEOYU BİRLEŞTİREN HAVUZ
 
         const configuration = {
             iceServers: [
@@ -110,7 +121,6 @@
         }
 
         async function initRoom() {
-            // Çift çalışmayı engelleyen koruma
             if (peerConnection !== null) return;
 
             try {
@@ -134,36 +144,38 @@
                     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
+                // GÖRÜNTÜ VE SES İZİ GELDİĞİNDE ÇALIŞIR
                 peerConnection.ontrack = (event) => {
-                    console.log("🎥 VİDEO İZİ GELDİ, OYNATMA BEKLENİYOR...");
-                    const remoteVideo = document.getElementById('remoteVideo');
+                    console.log("🎥 İZ GELDİ (Tür):", event.track.kind);
                     
-                    let stream = (event.streams && event.streams[0]) 
-                        ? event.streams[0] 
-                        : new MediaStream([event.track]);
-
-                    remoteVideo.srcObject = stream;
+                    // Gelen her izi (ses ve video) ortak akışa ekle
+                    remoteStream.addTrack(event.track);
+                    
+                    const remoteVideo = document.getElementById('remoteVideo');
+                    if (remoteVideo.srcObject !== remoteStream) {
+                        remoteVideo.srcObject = remoteStream;
+                    }
                     
                     document.getElementById('setup-container').style.display = 'none';
                     document.getElementById('loading-overlay').style.display = 'flex';
 
+                    // Görüntü akışı başladığında tetiklenir (muted olduğu için asla takılmaz)
                     remoteVideo.onplaying = () => {
                         console.log("✅ GÖRÜNTÜ EKRANA YANSIDI!");
                         document.getElementById('loading-overlay').style.display = 'none';
                         remoteVideo.style.display = 'block';
                         document.getElementById('stop-btn').style.display = 'block';
+
+                        // Görüntü geldikten hemen sonra sesi açmayı dene
+                        setTimeout(() => {
+                            remoteVideo.muted = false;
+                            if (remoteVideo.muted) {
+                                document.getElementById('unmute-badge').style.display = 'block';
+                            }
+                        }, 300);
                     };
 
-                    setTimeout(() => {
-                        remoteVideo.muted = false;
-                        remoteVideo.play().catch(e => {
-                            console.warn("Tarayıcı otomatik sesli oynatmayı engelledi. İlk tıkta açılacak.", e);
-                            document.body.addEventListener('click', () => {
-                                remoteVideo.muted = false;
-                                remoteVideo.play();
-                            }, { once: true });
-                        });
-                    }, 150);
+                    remoteVideo.play().catch(e => console.warn("Oynatma uyarısı:", e));
                 };
 
                 const roomRef = db.collection('pins').doc(currentPinId);
@@ -174,9 +186,7 @@
                     }
                 };
 
-                // SONSUZ DÖNGÜ VE ERKEN RESYNC KORUMALI DİNLEYİCİ
                 roomRef.onSnapshot(async (snapshot) => {
-                    // 1. Doküman henüz yoksa ve bağlantı hiç başlamadıysa SAKIN SIFIRLAMA, SADECE BEKLE!
                     if (!snapshot.exists) {
                         if (isConnecting) {
                             console.log("🛑 Aktif oturum silindi, ana ekrana dönülüyor...");
@@ -187,18 +197,16 @@
 
                     const data = snapshot.data();
 
-                    // 2. Telefon 'status: ended' gönderdiyse yayını kes
                     if (data && data.status === 'ended') {
                         console.log("🛑 Yayın telefondan sonlandırıldı. QR ekrana dönülüyor...");
                         stopStream();
                         return;
                     }
 
-                    // 3. Telefondan Offer geldiyse ve henüz işlenmediyse Answer oluştur
                     if (data && data.offer && !peerConnection.currentRemoteDescription) {
                         try {
                             console.log("📥 OFFER Geldi, İşleniyor...");
-                            isConnecting = true; // KİLİT AÇILDI: Artık bağlantı başladı
+                            isConnecting = true;
                             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                             const answer = await peerConnection.createAnswer();
                             await peerConnection.setLocalDescription(answer);
@@ -225,17 +233,21 @@
             } catch (error) {
                 console.error("🚨 BAŞLATMA HATASI:", error);
                 document.getElementById('pin-display').innerText = "Bağlantı Hatası!";
-                document.getElementById('pin-display').style.color = "#ff5252";
                 document.getElementById('error-display').innerText = error.message || error;
             }
         }
 
-        // EVRENSEL TEK TIKLA TAM EKRAN AÇ / KAPAT
+        // EVRENSEL TIKLAMA: Hem sesi açar hem tam ekran yapar
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
             
             if (remoteVideo.style.display === 'block') {
+                // Sesi aç
+                remoteVideo.muted = false;
+                document.getElementById('unmute-badge').style.display = 'none';
+
+                // Tam ekran yap
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     if (document.documentElement.requestFullscreen) {
                         document.documentElement.requestFullscreen();
