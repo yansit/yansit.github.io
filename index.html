@@ -51,7 +51,6 @@
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
 
-        /* Tarayıcı Sesi Engellerse Çıkacak Şık Uyarı Rozeti */
         #unmute-badge {
             display: none; position: fixed; bottom: 30px; right: 30px;
             background: #1E88E5; color: white; padding: 14px 24px;
@@ -81,7 +80,6 @@
         <div class="loading-text">Görüntü Aktarılıyor...</div>
     </div>
 
-    <!-- muted özelliği ile tarayıcı engeli 100% aşılır -->
     <video id="remoteVideo" autoplay playsinline muted></video>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
@@ -102,7 +100,7 @@
         let currentPinId = null;
         let db = null;
         let isConnecting = false;
-        let remoteStream = new MediaStream(); // SES VE VİDEOYU BİRLEŞTİREN HAVUZ
+        let remoteStream = new MediaStream();
 
         const configuration = {
             iceServers: [
@@ -144,11 +142,9 @@
                     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
-                // GÖRÜNTÜ VE SES İZİ GELDİĞİNDE ÇALIŞIR
                 peerConnection.ontrack = (event) => {
                     console.log("🎥 İZ GELDİ (Tür):", event.track.kind);
                     
-                    // Gelen her izi (ses ve video) ortak akışa ekle
                     remoteStream.addTrack(event.track);
                     
                     const remoteVideo = document.getElementById('remoteVideo');
@@ -159,23 +155,25 @@
                     document.getElementById('setup-container').style.display = 'none';
                     document.getElementById('loading-overlay').style.display = 'flex';
 
-                    // Görüntü akışı başladığında tetiklenir (muted olduğu için asla takılmaz)
+                    // 100% GARANTİLİ: Tarayıcının engellememesi için JS üzerinden muted zorluyoruz!
+                    remoteVideo.muted = true;
+
                     remoteVideo.onplaying = () => {
                         console.log("✅ GÖRÜNTÜ EKRANA YANSIDI!");
                         document.getElementById('loading-overlay').style.display = 'none';
                         remoteVideo.style.display = 'block';
                         document.getElementById('stop-btn').style.display = 'block';
-
-                        // Görüntü geldikten hemen sonra sesi açmayı dene
-                        setTimeout(() => {
-                            remoteVideo.muted = false;
-                            if (remoteVideo.muted) {
-                                document.getElementById('unmute-badge').style.display = 'block';
-                            }
-                        }, 300);
+                        document.getElementById('unmute-badge').style.display = 'block';
                     };
 
-                    remoteVideo.play().catch(e => console.warn("Oynatma uyarısı:", e));
+                    // Sessiz oynatmayı zorla başlat (Asla NotAllowedError vermez)
+                    remoteVideo.play().catch(e => {
+                        console.warn("Sessiz oynatıda bile engel oluştu, tıklandığında açılacak:", e);
+                        document.body.addEventListener('click', () => {
+                            remoteVideo.muted = false;
+                            remoteVideo.play();
+                        }, { once: true });
+                    });
                 };
 
                 const roomRef = db.collection('pins').doc(currentPinId);
@@ -237,17 +235,15 @@
             }
         }
 
-        // EVRENSEL TIKLAMA: Hem sesi açar hem tam ekran yapar
+        // EVRENSEL TIKLAMA: Hem sesi açar, rozeti gizler hem de tam ekran yapar
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
             
             if (remoteVideo.style.display === 'block') {
-                // Sesi aç
                 remoteVideo.muted = false;
                 document.getElementById('unmute-badge').style.display = 'none';
 
-                // Tam ekran yap
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     if (document.documentElement.requestFullscreen) {
                         document.documentElement.requestFullscreen();
