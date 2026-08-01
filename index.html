@@ -34,7 +34,6 @@
         .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
         .error-code { font-size: 14px; color: #ff5252; margin-top: 10px; max-width: 300px; word-wrap: break-word; }
         
-        /* Ekranın oval köşelerini siyaha gizleyen sinema modu */
         #remoteVideo { 
             width: 100vw; height: 100vh; 
             object-fit: contain; 
@@ -43,6 +42,16 @@
         
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
+
+        /* Tarayıcı sesli oynatmayı kilitlerse çıkacak uyarı rozeti */
+        #unmute-badge {
+            display: none; position: fixed; bottom: 30px; right: 30px;
+            background: #1E88E5; color: white; padding: 14px 24px;
+            border-radius: 50px; font-weight: bold; font-size: 16px;
+            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.5); z-index: 999;
+            cursor: pointer; animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
     </style>
 
     <!-- Firebase SDK & QRCode JS -->
@@ -60,10 +69,13 @@
         <div id="error-display" class="error-code"></div>
     </div>
 
-    <!-- Görüntü Ekranı: Sessizden (muted) çıkartıp tarayıcı ses aktarımını açtığımız doğal etiket -->
+    <!-- Görüntü Ekranı -->
     <video id="remoteVideo" autoplay playsinline></video>
+    <!-- Ses Ekranı (Arka planda bağımsız ses oynatıcı) -->
+    <audio id="remoteAudio" autoplay></audio>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
+    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Sesi Açmak İçin Dokunun</div>
 
     <script>
         const firebaseConfig = {
@@ -130,33 +142,32 @@
                     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
-                // ESKİ DOĞAL PROTOKOL: Görüntü veya ses geldiği an doğrudan ekrana yansıt ve kutuyu gizle!
+                // GÖRÜNTÜ VE SES KANALLARI AYRILDI: Birbirlerini asla engellemezler!
                 peerConnection.ontrack = (event) => {
-                    console.log("🎥 AKIŞ YAKALANDI!", event.track.kind);
-                    const remoteVideo = document.getElementById('remoteVideo');
+                    console.log("🎥 AKIŞ YAKALANDI (Tür):", event.track.kind);
                     
-                    let stream = (event.streams && event.streams[0]) 
-                        ? event.streams[0] 
-                        : new MediaStream([event.track]);
+                    if (event.track.kind === 'video') {
+                        const remoteVideo = document.getElementById('remoteVideo');
+                        remoteVideo.srcObject = new MediaStream([event.track]);
+                        
+                        document.getElementById('setup-container').style.display = 'none';
+                        remoteVideo.style.display = 'block';
+                        document.getElementById('stop-btn').style.display = 'block';
 
-                    remoteVideo.srcObject = stream;
-                    
-                    // Bekleme animasyonu yok; QR ekrandan kalkıp yerini videoya bırakır
-                    document.getElementById('setup-container').style.display = 'none';
-                    remoteVideo.style.display = 'block';
-                    document.getElementById('stop-btn').style.display = 'block';
-
-                    // Tarayıcı otomatik sesli oynatmayı engellerse, ekrana ilk dokunuşta sesi aç
-                    setTimeout(() => {
-                        remoteVideo.muted = false;
-                        remoteVideo.play().catch(e => {
-                            console.warn("Tarayıcı otomatik sesi kilitledi, ekrana ilk tıklandığında ses açılacak.", e);
-                            document.body.addEventListener('click', () => {
-                                remoteVideo.muted = false;
-                                remoteVideo.play();
-                            }, { once: true });
+                        remoteVideo.play().catch(e => console.warn("Video oynatma uyarısı:", e));
+                    } 
+                    else if (event.track.kind === 'audio') {
+                        console.log("🔊 SES İZİ GELDİ, BAĞLANIYOR...");
+                        const remoteAudio = document.getElementById('remoteAudio');
+                        remoteAudio.srcObject = new MediaStream([event.track]);
+                        
+                        remoteAudio.play().then(() => {
+                            console.log("✅ Ses otomatik başladı!");
+                        }).catch(e => {
+                            console.warn("Tarayıcı otomatik sesi kısıtladı, ekrana ilk dokunuşta açılacak:", e);
+                            document.getElementById('unmute-badge').style.display = 'block';
                         });
-                    }, 150);
+                    }
                 };
 
                 const roomRef = db.collection('pins').doc(currentPinId);
@@ -218,13 +229,24 @@
             }
         }
 
-        // EVRENSEL TIKLAMA: Ekranın herhangi bir yerine tıklandığında tam ekran yap ve sesi aç
+        function unmuteAudio(e) {
+            if (e) e.stopPropagation();
+            const remoteAudio = document.getElementById('remoteAudio');
+            remoteAudio.muted = false;
+            remoteAudio.play();
+            document.getElementById('unmute-badge').style.display = 'none';
+        }
+
+        // EVRENSEL TIKLAMA: Ekranın herhangi bir yerine tıklandığında sesi aç ve tam ekran yap
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
+            const remoteAudio = document.getElementById('remoteAudio');
             
             if (remoteVideo.style.display === 'block') {
-                remoteVideo.muted = false;
+                remoteAudio.muted = false;
+                remoteAudio.play().catch(err => console.log(err));
+                document.getElementById('unmute-badge').style.display = 'none';
 
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     if (document.documentElement.requestFullscreen) {
