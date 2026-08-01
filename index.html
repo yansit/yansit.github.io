@@ -35,14 +35,18 @@
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
 
     <script>
-        // FIREBASE YAPILANDIRMANIZ
+        // =========================================================================
+        // DİKKAT: BURAYI KENDİ GERÇEK FIREBASE WEB PROJE BİLGİLERİNLE DEĞİŞTİR!
+        // =========================================================================
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT_ID.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            
+            apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
+            authDomain: "fast-screen-mirror.firebaseapp.com",
+            projectId: "fast-screen-mirror",
+            storageBucket: "fast-screen-mirror.firebasestorage.app",
+            messagingSenderId: "343909100411",
+            appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
+            measurementId: "G-2TCB607Q45"
         };
 
         if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
@@ -85,9 +89,9 @@
                 peerConnection.addTransceiver('video', { direction: 'recvonly' });
             }
 
-            // GÖRÜNTÜ GELME GARANTİSİ: Stream veya Track olarak gelse de yakalar
+            // GÖRÜNTÜ YAKALAYICI
             peerConnection.ontrack = (event) => {
-                console.log("🎥 VİDEO AKIŞI GELİYOR!", event);
+                console.log("🎥 VİDEO AKIŞI GELDİ!", event);
                 const remoteVideo = document.getElementById('remoteVideo');
                 
                 let stream = (event.streams && event.streams[0]) 
@@ -143,7 +147,7 @@
             });
         }
 
-        // EVRENSEL TEK TIKLA TAM EKRAN AÇ / KAPAT
+        // TEK TIKLA TAM EKRAN YAP / TAM EKRANDAN ÇIK
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
