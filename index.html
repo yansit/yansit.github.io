@@ -43,7 +43,6 @@
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
 
-        /* Tarayıcı sesli oynatmayı kilitlerse çıkacak uyarı rozeti */
         #unmute-badge {
             display: none; position: fixed; bottom: 30px; right: 30px;
             background: #1E88E5; color: white; padding: 14px 24px;
@@ -69,9 +68,9 @@
         <div id="error-display" class="error-code"></div>
     </div>
 
-    <!-- Görüntü Ekranı -->
-    <video id="remoteVideo" autoplay playsinline></video>
-    <!-- Ses Ekranı (Arka planda bağımsız ses oynatıcı) -->
+    <!-- Siyah Ekranı Engellemek İçin muted Ekli (Tarayıcı asla durduramaz) -->
+    <video id="remoteVideo" autoplay playsinline muted></video>
+    <!-- Ses Arkadaki Bağımsız Oynatıcıdan Gelir -->
     <audio id="remoteAudio" autoplay></audio>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
@@ -142,29 +141,29 @@
                     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
-                // GÖRÜNTÜ VE SES KANALLARI AYRILDI: Birbirlerini asla engellemezler!
                 peerConnection.ontrack = (event) => {
-                    console.log("🎥 AKIŞ YAKALANDI (Tür):", event.track.kind);
+                    console.log("🎥 AKIŞ GELDİ (Tür):", event.track.kind);
                     
                     if (event.track.kind === 'video') {
                         const remoteVideo = document.getElementById('remoteVideo');
-                        remoteVideo.srcObject = new MediaStream([event.track]);
+                        remoteVideo.srcObject = event.streams[0] || new MediaStream([event.track]);
+                        remoteVideo.muted = true; // Siyah ekranı engelleyen kilit nokta!
                         
                         document.getElementById('setup-container').style.display = 'none';
                         remoteVideo.style.display = 'block';
                         document.getElementById('stop-btn').style.display = 'block';
 
-                        remoteVideo.play().catch(e => console.warn("Video oynatma uyarısı:", e));
+                        remoteVideo.play().catch(e => console.warn("Video uyarısı:", e));
                     } 
                     else if (event.track.kind === 'audio') {
-                        console.log("🔊 SES İZİ GELDİ, BAĞLANIYOR...");
+                        console.log("🔊 SES İZİ YAKALANDI");
                         const remoteAudio = document.getElementById('remoteAudio');
-                        remoteAudio.srcObject = new MediaStream([event.track]);
+                        remoteAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
                         
                         remoteAudio.play().then(() => {
-                            console.log("✅ Ses otomatik başladı!");
+                            console.log("✅ Ses akışı başladı!");
                         }).catch(e => {
-                            console.warn("Tarayıcı otomatik sesi kısıtladı, ekrana ilk dokunuşta açılacak:", e);
+                            console.warn("Tarayıcı sesi kilitledi, dokunma butonu açıldı:", e);
                             document.getElementById('unmute-badge').style.display = 'block';
                         });
                     }
