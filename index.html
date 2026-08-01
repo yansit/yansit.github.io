@@ -34,14 +34,7 @@
         .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
         .error-code { font-size: 14px; color: #ff5252; margin-top: 10px; max-width: 300px; word-wrap: break-word; }
         
-        #loading-overlay {
-            display: none; position: fixed; inset: 0; background: #000000;
-            flex-direction: column; justify-content: center; align-items: center; z-index: 50;
-        }
-        .spinner { width: 50px; height: 50px; border: 5px solid #333; border-top-color: #1E88E5; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text { margin-top: 16px; font-size: 18px; color: #ccc; font-weight: bold; }
-
+        /* Ekranın oval köşelerini siyaha gizleyen sinema modu */
         #remoteVideo { 
             width: 100vw; height: 100vh; 
             object-fit: contain; 
@@ -50,15 +43,6 @@
         
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
-
-        #unmute-badge {
-            display: none; position: fixed; bottom: 30px; right: 30px;
-            background: #1E88E5; color: white; padding: 14px 24px;
-            border-radius: 50px; font-weight: bold; font-size: 16px;
-            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.5); z-index: 999;
-            cursor: pointer; animation: pulse 1.5s infinite;
-        }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
     </style>
 
     <!-- Firebase SDK & QRCode JS -->
@@ -76,20 +60,12 @@
         <div id="error-display" class="error-code"></div>
     </div>
 
-    <div id="loading-overlay">
-        <div class="spinner"></div>
-        <div class="loading-text">Görüntü Aktarılıyor...</div>
-    </div>
-
-    <video id="remoteVideo" autoplay playsinline muted></video>
+    <!-- Görüntü Ekranı: Sessizden (muted) çıkartıp tarayıcı ses aktarımını açtığımız doğal etiket -->
+    <video id="remoteVideo" autoplay playsinline></video>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
-    <div id="unmute-badge">🔊 Sesi Açmak İçin Tıklayın</div>
 
     <script>
-        // =========================================================================
-        // FIREBASE YAPILANDIRMASI (VİRGÜL HATASI DÜZELTİLDİ)
-        // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAuy2eGCYG-PFg78AbUM0xRsfjQgKiL16U",
             authDomain: "fast-screen-mirror.firebaseapp.com",
@@ -97,14 +73,13 @@
             storageBucket: "fast-screen-mirror.firebasestorage.app",
             messagingSenderId: "343909100411",
             appId: "1:343909100411:web:897479e9f8f48c7c1bebde",
-            measurementId: "G-2TCB607Q45"
+            measurementId: "G-2TCB607Q45",
         };
 
         let peerConnection = null;
         let currentPinId = null;
         let db = null;
         let isConnecting = false;
-        let remoteStream = new MediaStream();
 
         const configuration = {
             iceServers: [
@@ -135,7 +110,6 @@
                 console.log("🌐 Oda Oluşturuldu PIN:", currentPinId);
                 document.getElementById('pin-display').innerText = currentPinId;
 
-                // %100 GARANTİLİ YEREL QR ÜRETİMİ (Kutu çizildikten sonra milisaniyeler içinde üretilir)
                 const qrContainer = document.getElementById("qrcode");
                 qrContainer.innerHTML = "";
                 setTimeout(() => {
@@ -156,37 +130,33 @@
                     peerConnection.addTransceiver('audio', { direction: 'recvonly' });
                 }
 
+                // ESKİ DOĞAL PROTOKOL: Görüntü veya ses geldiği an doğrudan ekrana yansıt ve kutuyu gizle!
                 peerConnection.ontrack = (event) => {
-                    console.log("🎥 İZ GELDİ (Tür):", event.track.kind);
-                    
-                    remoteStream.addTrack(event.track);
-                    
+                    console.log("🎥 AKIŞ YAKALANDI!", event.track.kind);
                     const remoteVideo = document.getElementById('remoteVideo');
-                    if (remoteVideo.srcObject !== remoteStream) {
-                        remoteVideo.srcObject = remoteStream;
-                    }
                     
+                    let stream = (event.streams && event.streams[0]) 
+                        ? event.streams[0] 
+                        : new MediaStream([event.track]);
+
+                    remoteVideo.srcObject = stream;
+                    
+                    // Bekleme animasyonu yok; QR ekrandan kalkıp yerini videoya bırakır
                     document.getElementById('setup-container').style.display = 'none';
-                    document.getElementById('loading-overlay').style.display = 'flex';
+                    remoteVideo.style.display = 'block';
+                    document.getElementById('stop-btn').style.display = 'block';
 
-                    // Tarayıcının play() metodunu reddetmemesi için sessiz oynatma zorlanıyor
-                    remoteVideo.muted = true;
-
-                    remoteVideo.onplaying = () => {
-                        console.log("✅ GÖRÜNTÜ EKRANA YANSIDI!");
-                        document.getElementById('loading-overlay').style.display = 'none';
-                        remoteVideo.style.display = 'block';
-                        document.getElementById('stop-btn').style.display = 'block';
-                        document.getElementById('unmute-badge').style.display = 'block';
-                    };
-
-                    remoteVideo.play().catch(e => {
-                        console.warn("Sessiz oynatıda bile engel oluştu, tıklandığında açılacak:", e);
-                        document.body.addEventListener('click', () => {
-                            remoteVideo.muted = false;
-                            remoteVideo.play();
-                        }, { once: true });
-                    });
+                    // Tarayıcı otomatik sesli oynatmayı engellerse, ekrana ilk dokunuşta sesi aç
+                    setTimeout(() => {
+                        remoteVideo.muted = false;
+                        remoteVideo.play().catch(e => {
+                            console.warn("Tarayıcı otomatik sesi kilitledi, ekrana ilk tıklandığında ses açılacak.", e);
+                            document.body.addEventListener('click', () => {
+                                remoteVideo.muted = false;
+                                remoteVideo.play();
+                            }, { once: true });
+                        });
+                    }, 150);
                 };
 
                 const roomRef = db.collection('pins').doc(currentPinId);
@@ -248,14 +218,13 @@
             }
         }
 
-        // EVRENSEL TIKLAMA: Hem sesi açar, rozeti gizler hem de tam ekran yapar
+        // EVRENSEL TIKLAMA: Ekranın herhangi bir yerine tıklandığında tam ekran yap ve sesi aç
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
             
             if (remoteVideo.style.display === 'block') {
                 remoteVideo.muted = false;
-                document.getElementById('unmute-badge').style.display = 'none';
 
                 if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                     if (document.documentElement.requestFullscreen) {
