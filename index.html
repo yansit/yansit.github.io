@@ -12,7 +12,7 @@
         .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
         .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
         .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
-        #remoteVideo { width: 100vw; height: 100vh; object-fit: contain; display: none; background: #000; }
+        #remoteVideo { width: 100vw; height: 100vh; object-fit: contain; display: none; background: #000; cursor: pointer; }
         #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.8); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
         #stop-btn:hover { background: rgba(244, 67, 54, 1); }
     </style>
@@ -30,11 +30,12 @@
         <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
     </div>
 
+    <!-- Canlı Video Ekranı -->
     <video id="remoteVideo" autoplay playsinline muted></video>
     <button id="stop-btn" onclick="stopStream()">Yayını Kes</button>
 
     <script>
-        // FIREBASE YAPILANDIRMANIZI BURAYA EKLENİN
+        // 1. FIREBASE YAPILANDIRMANIZ
         const firebaseConfig = {
             apiKey: "YOUR_API_KEY",
             authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -80,13 +81,13 @@
 
             peerConnection = new RTCPeerConnection(configuration);
 
-            // 1. KRİTİK DÜZELTME: Chrome WebRTC'nin video alacağını tanımlıyoruz!
-            peerConnection.addTransceiver('video', { direction: 'recvonly' });
-            console.log("🛠️ Video Transceiver (recvonly) eklendi.");
+            // TÜM BROWSERLAR/TV'LER İÇİN VİDEO ALICI KANALI
+            if ('addTransceiver' in peerConnection) {
+                peerConnection.addTransceiver('video', { direction: 'recvonly' });
+            }
 
-            // 2. VIDEO GELDİĞİNDE
             peerConnection.ontrack = (event) => {
-                console.log("🎥 VİDEO AKIŞI GELİYOR!", event.streams);
+                console.log("🎥 VİDEO AKIŞI GELDİ!", event.streams);
                 const remoteVideo = document.getElementById('remoteVideo');
                 remoteVideo.srcObject = event.streams[0];
                 document.getElementById('setup-container').style.display = 'none';
@@ -104,35 +105,54 @@
                 }
             };
 
-            // 3. TELEFONDAN OFFER GELMESİNİ DİNLEME
+            // TELEFONDAN OFFER GELMESİNİ DİNLEME
             roomRef.onSnapshot(async (snapshot) => {
-                const data = snapshot.data();
-                if (data && data.offer && !peerConnection.currentRemoteDescription) {
-                    console.log("📥 Telefondan OFFER Geldi!");
+                try {
+                    const data = snapshot.data();
+                    if (data && data.offer && !peerConnection.currentRemoteDescription) {
+                        console.log("📥 OFFER Geldi, İşleniyor...");
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                        const answer = await peerConnection.createAnswer();
+                        await peerConnection.setLocalDescription(answer);
 
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-
-                    console.log("📤 Browser ANSWER Oluşturdu, Firestore'a yazılıyor...");
-
-                    await roomRef.update({
-                        answer: { type: answer.type, sdp: answer.sdp },
-                        status: 'connected'
-                    });
-                    console.log("✅ ANSWER Firestore'a Başarıyla Yazıldı!");
+                        console.log("📤 ANSWER Oluşturuldu, Firestore'a yazılıyor...");
+                        await roomRef.update({
+                            answer: { type: answer.type, sdp: answer.sdp },
+                            status: 'connected'
+                        });
+                        console.log("✅ ANSWER Başarıyla Yazıldı!");
+                    }
+                } catch (err) {
+                    console.error("❌ Offer-Answer Hatası:", err);
                 }
             });
 
             roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     if (change.type === 'added') {
-                        console.log("❄️ Telefondan ICE Candidate Alındı.");
                         peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
                     }
                 });
             });
         }
+
+        // TEK TIKLA TAM EKRAN AÇ / KAPAT
+        const remoteVideoEl = document.getElementById('remoteVideo');
+        remoteVideoEl.addEventListener('click', () => {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (remoteVideoEl.requestFullscreen) {
+                    remoteVideoEl.requestFullscreen();
+                } else if (remoteVideoEl.webkitRequestFullscreen) {
+                    remoteVideoEl.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        });
 
         async function stopStream() {
             if (peerConnection) peerConnection.close();
