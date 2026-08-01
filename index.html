@@ -71,7 +71,7 @@
     <audio id="remoteAudio" autoplay></audio>
     
     <button id="stop-btn" onclick="stopStream(event)">Yayını Sonlandır</button>
-    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Ses Sürücüsünü Etkinleştir</div>
+    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Sesi Etkinleştirmek İçin Dokunun</div>
 
     <script>
         const firebaseConfig = {
@@ -88,6 +88,7 @@
         let currentPinId = null;
         let db = null;
         let isConnecting = false;
+        let pendingCandidates = []; // HATA ÖNLEYİCİ CANDIDATE BEKLEME HAVUZU
 
         const configuration = {
             iceServers: [
@@ -138,6 +139,8 @@
                 }
 
                 peerConnection.ontrack = (event) => {
+                    console.log("🎥 AKIŞ YAKALANDI (Tür):", event.track.kind);
+                    
                     if (event.track.kind === 'video') {
                         const remoteVideo = document.getElementById('remoteVideo');
                         remoteVideo.srcObject = event.streams[0] || new MediaStream([event.track]);
@@ -147,13 +150,17 @@
                         remoteVideo.style.display = 'block';
                         document.getElementById('stop-btn').style.display = 'block';
 
-                        remoteVideo.play().catch(e => console.warn("Video yürütme uyarısı:", e));
+                        remoteVideo.play().catch(e => console.warn("Video uyarısı:", e));
                     } 
                     else if (event.track.kind === 'audio') {
+                        console.log("🔊 SES İZİ TV İÇİN ALINDI!");
                         const remoteAudio = document.getElementById('remoteAudio');
                         remoteAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
                         
-                        remoteAudio.play().catch(e => {
+                        remoteAudio.play().then(() => {
+                            console.log("✅ Ses TV'den başarıyla çalıyor!");
+                        }).catch(e => {
+                            console.warn("Tarayıcı otomatik sesi kilitledi, dokunma butonu aktif:", e);
                             document.getElementById('unmute-badge').style.display = 'block';
                         });
                     }
@@ -184,8 +191,16 @@
 
                     if (data && data.offer && !peerConnection.currentRemoteDescription) {
                         try {
+                            console.log("📥 OFFER Geldi, İşleniyor...");
                             isConnecting = true;
                             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                            
+                            // BEKLEYEN ICE ADAYLARINI GÜVENLE EKLE (INVALID STATE HATASINI BİTİRİR)
+                            while (pendingCandidates.length > 0) {
+                                const candidate = pendingCandidates.shift();
+                                await peerConnection.addIceCandidate(candidate);
+                            }
+
                             const answer = await peerConnection.createAnswer();
                             await peerConnection.setLocalDescription(answer);
 
@@ -193,16 +208,30 @@
                                 answer: { type: answer.type, sdp: answer.sdp },
                                 status: 'connected'
                             });
+                            console.log("✅ ANSWER Başarıyla Yazıldı!");
                         } catch (err) {
                             console.error("Session hatası:", err);
                         }
                     }
                 });
 
+                // ICE CANDIDATE DİNLEYİCİSİ (Sıralama Korumalı)
                 roomRef.collection('callerCandidates').onSnapshot((snapshot) => {
-                    snapshot.docChanges().forEach((change) => {
+                    snapshot.docChanges().forEach(async (change) => {
                         if (change.type === 'added') {
-                            peerConnection.addIceCandidate(new RTCIceCandidate(change.doc.data()));
+                            const candidateData = change.doc.data();
+                            const candidate = new RTCIceCandidate(candidateData);
+                            
+                            if (peerConnection.remoteDescription && peerConnection.remoteDescription.type) {
+                                try {
+                                    await peerConnection.addIceCandidate(candidate);
+                                } catch(e) {
+                                    console.warn("Candidate ekleme uyarısı:", e);
+                                }
+                            } else {
+                                // Offer henüz işlenmediyse adayı havuza at
+                                pendingCandidates.push(candidate);
+                            }
                         }
                     });
                 });
@@ -238,6 +267,15 @@
                         document.documentElement.webkitRequestFullscreen();
                     }
                 }
+            }
+        });
+
+        document.addEventListener("visibilitychange", () => {
+            if (!document.hidden) {
+                const remoteVideo = document.getElementById('remoteVideo');
+                const remoteAudio = document.getElementById('remoteAudio');
+                if (remoteVideo.srcObject) remoteVideo.play().catch(()=>{});
+                if (remoteAudio.srcObject) remoteAudio.play().catch(()=>{});
             }
         });
 
