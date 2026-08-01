@@ -3,23 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast Screen Mirror - Akıllı Tahta</title>
+    <title>Fast Screen Mirror - Alıcı Ekranı</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body, html { 
             width: 100%; height: 100%; 
             background-color: #000000; 
-            font-family: sans-serif; overflow: hidden; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            overflow: hidden; 
             display: flex; justify-content: center; align-items: center; 
             color: #fff; 
         }
         
-        #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
+        #setup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: #121212; padding: 40px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
         
         #qrcode { 
             background: #ffffff; 
             padding: 16px; 
-            border-radius: 16px; 
+            border-radius: 12px; 
             margin: 24px 0; 
             width: 232px; 
             height: 232px;
@@ -29,10 +30,10 @@
         }
         #qrcode img, #qrcode canvas { width: 200px !important; height: 200px !important; display: block; }
         
-        .title { font-size: 28px; font-weight: bold; color: #1E88E5; }
-        .subtitle { font-size: 16px; color: #aaa; margin-top: 8px; }
-        .pin-code { font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #4CAF50; margin-top: 10px; }
-        .error-code { font-size: 14px; color: #ff5252; margin-top: 10px; max-width: 300px; word-wrap: break-word; }
+        .title { font-size: 26px; font-weight: 700; color: #1E88E5; }
+        .subtitle { font-size: 15px; color: #aaa; margin-top: 8px; }
+        .pin-code { font-size: 20px; font-weight: 700; letter-spacing: 2px; color: #4CAF50; margin-top: 12px; }
+        .error-code { font-size: 13px; color: #ff5252; margin-top: 10px; max-width: 300px; word-wrap: break-word; }
         
         #remoteVideo { 
             width: 100vw; height: 100vh; 
@@ -40,20 +41,18 @@
             display: none; background: #000000; cursor: pointer; 
         }
         
-        #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.85); color: white; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: bold; display: none; z-index: 999; backdrop-filter: blur(5px); }
-        #stop-btn:hover { background: rgba(244, 67, 54, 1); }
+        #stop-btn { position: fixed; top: 20px; left: 20px; background: rgba(244, 67, 54, 0.9); color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; display: none; z-index: 999; backdrop-filter: blur(4px); }
+        #stop-btn:hover { background: rgba(211, 47, 47, 1); }
 
         #unmute-badge {
             display: none; position: fixed; bottom: 30px; right: 30px;
-            background: #1E88E5; color: white; padding: 14px 24px;
-            border-radius: 50px; font-weight: bold; font-size: 16px;
-            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.5); z-index: 999;
-            cursor: pointer; animation: pulse 1.5s infinite;
+            background: #1E88E5; color: white; padding: 12px 24px;
+            border-radius: 30px; font-weight: 600; font-size: 14px;
+            box-shadow: 0 4px 15px rgba(30, 136, 229, 0.4); z-index: 999;
+            cursor: pointer;
         }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.06); } 100% { transform: scale(1); } }
     </style>
 
-    <!-- Firebase SDK & QRCode JS -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -62,7 +61,7 @@
 
     <div id="setup-container">
         <div class="title">Fast Screen Mirror</div>
-        <div class="subtitle">Telefondaki uygulamadan bu QR kodu okutun</div>
+        <div class="subtitle">Mobil uygulamadan QR kodu taratınız</div>
         <div id="qrcode"></div>
         <div id="pin-display" class="pin-code">PIN Oluşturuluyor...</div>
         <div id="error-display" class="error-code"></div>
@@ -71,8 +70,8 @@
     <video id="remoteVideo" autoplay playsinline muted></video>
     <audio id="remoteAudio" autoplay></audio>
     
-    <button id="stop-btn" onclick="stopStream(event)">Yayını Kes</button>
-    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Sesi TV'ye Aktarmak İçin Dokunun</div>
+    <button id="stop-btn" onclick="stopStream(event)">Yayını Sonlandır</button>
+    <div id="unmute-badge" onclick="unmuteAudio(event)">🔊 Ses Sürücüsünü Etkinleştir</div>
 
     <script>
         const firebaseConfig = {
@@ -116,7 +115,6 @@
                 db = firebase.firestore();
 
                 currentPinId = generatePin();
-                console.log("🌐 Oda Oluşturuldu PIN:", currentPinId);
                 document.getElementById('pin-display').innerText = currentPinId;
 
                 const qrContainer = document.getElementById("qrcode");
@@ -140,13 +138,6 @@
                 }
 
                 peerConnection.ontrack = (event) => {
-                    console.log("🎥 AKIŞ GELDİ (Tür):", event.track.kind);
-                    
-                    // CRASH KORUMASI: İz koptuğunda patlama
-                    event.track.onended = () => {
-                        console.warn("Medya izi koptu.");
-                    };
-
                     if (event.track.kind === 'video') {
                         const remoteVideo = document.getElementById('remoteVideo');
                         remoteVideo.srcObject = event.streams[0] || new MediaStream([event.track]);
@@ -156,17 +147,13 @@
                         remoteVideo.style.display = 'block';
                         document.getElementById('stop-btn').style.display = 'block';
 
-                        remoteVideo.play().catch(e => console.warn("Video uyarısı:", e));
+                        remoteVideo.play().catch(e => console.warn("Video yürütme uyarısı:", e));
                     } 
                     else if (event.track.kind === 'audio') {
-                        console.log("🔊 SES İZİ YAKALANDI");
                         const remoteAudio = document.getElementById('remoteAudio');
                         remoteAudio.srcObject = event.streams[0] || new MediaStream([event.track]);
                         
-                        remoteAudio.play().then(() => {
-                            console.log("✅ Ses TV'den aktarılıyor!");
-                        }).catch(e => {
-                            console.warn("TV sesli oynatmayı kilitledi, dokunma rozeti açıldı:", e);
+                        remoteAudio.play().catch(e => {
                             document.getElementById('unmute-badge').style.display = 'block';
                         });
                     }
@@ -183,7 +170,6 @@
                 roomRef.onSnapshot(async (snapshot) => {
                     if (!snapshot.exists) {
                         if (isConnecting) {
-                            console.log("🛑 Aktif oturum silindi, ana ekrana dönülüyor...");
                             stopStream();
                         }
                         return;
@@ -192,14 +178,12 @@
                     const data = snapshot.data();
 
                     if (data && data.status === 'ended') {
-                        console.log("🛑 Yayın telefondan/tabletten sonlandırıldı. QR ekrana dönülüyor...");
                         stopStream();
                         return;
                     }
 
                     if (data && data.offer && !peerConnection.currentRemoteDescription) {
                         try {
-                            console.log("📥 OFFER Geldi, İşleniyor...");
                             isConnecting = true;
                             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
                             const answer = await peerConnection.createAnswer();
@@ -209,9 +193,8 @@
                                 answer: { type: answer.type, sdp: answer.sdp },
                                 status: 'connected'
                             });
-                            console.log("✅ ANSWER Başarıyla Yazıldı!");
                         } catch (err) {
-                            console.error("❌ Offer-Answer Hatası:", err);
+                            console.error("Session hatası:", err);
                         }
                     }
                 });
@@ -225,8 +208,7 @@
                 });
 
             } catch (error) {
-                console.error("🚨 BAŞLATMA HATASI:", error);
-                document.getElementById('pin-display').innerText = "Bağlantı Hatası!";
+                document.getElementById('pin-display').innerText = "Bağlantı Kurulamadı";
                 document.getElementById('error-display').innerText = error.message || error;
             }
         }
@@ -239,7 +221,6 @@
             document.getElementById('unmute-badge').style.display = 'none';
         }
 
-        // TV'DE SİMGE YENİDEN ODAKLANDIĞINDA VEYA TIKLANDIĞINDA CRASH OLMASINI ENGELLER
         document.addEventListener('click', (e) => {
             if (e.target.id === 'stop-btn') return;
             const remoteVideo = document.getElementById('remoteVideo');
@@ -250,28 +231,13 @@
                 remoteAudio.play().catch(err => console.log(err));
                 document.getElementById('unmute-badge').style.display = 'none';
 
-                try {
-                    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                        if (document.documentElement.requestFullscreen) {
-                            document.documentElement.requestFullscreen();
-                        } else if (document.documentElement.webkitRequestFullscreen) {
-                            document.documentElement.webkitRequestFullscreen();
-                        }
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen();
+                    } else if (document.documentElement.webkitRequestFullscreen) {
+                        document.documentElement.webkitRequestFullscreen();
                     }
-                } catch(err) {
-                    console.warn("Tam ekran izni reddedildi/desteklenmiyor:", err);
                 }
-            }
-        });
-
-        // TV'de sekme değiştiğinde crash olmaması için güvenlik kalkanı
-        document.addEventListener("visibilitychange", () => {
-            if (document.hidden) {
-                console.log("TV Sekmesi arka plana atıldı.");
-            } else {
-                console.log("TV Sekmesine geri dönüldü.");
-                const remoteVideo = document.getElementById('remoteVideo');
-                if (remoteVideo.srcObject) remoteVideo.play().catch(()=>{});
             }
         });
 
@@ -284,7 +250,7 @@
             if (currentPinId && db) {
                 try { 
                     await db.collection('pins').doc(currentPinId).update({ status: 'ended' });
-                    await new Promise(r => setTimeout(r, 300));
+                    await new Promise(r => setTimeout(r, 200));
                     await db.collection('pins').doc(currentPinId).delete(); 
                 } catch(err){}
             }
